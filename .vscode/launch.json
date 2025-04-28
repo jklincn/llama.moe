@@ -1,0 +1,28 @@
+{
+    // 使用 IntelliSense 了解相关属性。
+    // 悬停以查看现有属性的描述。
+    // 欲了解更多信息，请访问: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "LLDB: Debug llama-cli",
+            "type": "lldb",
+            "request": "launch",
+            "program": "${workspaceFolder}/llama.cpp/build/bin/llama-cli",
+            "args": [
+                "-m",
+                "/mnt/data/gguf/qwen2.5-0.5b-instruct-q4_k_m.gguf",
+                "--prompt",
+                "Once upon a time",
+                "--n-predict",
+                "2",
+                "--n-gpu-layers",
+                "4",
+                "--single-turn",
+                "--color",
+            ],
+            "cwd": "${workspaceFolder}",
+            "stopOnEntry": false
+        }
+    ]
+}

@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+
+set -e
+set -x
+
+# sudo apt update
+# sudo apt install -y build-essential cmake ccache
+
+BUILD_TYPE="Debug"
+EXTRA_FLAGS="-g -O0 -fno-omit-frame-pointer -fno-optimize-sibling-calls -fno-inline"
+
+while getopts "r" opt; do
+  case $opt in
+    r)
+      BUILD_TYPE="Release"
+      EXTRA_FLAGS=""
+      ;;
+    \?)
+      echo "Invalid option: -$OPTARG" >&2
+      exit 1
+      ;;
+  esac
+done
+
+export CXX=/usr/bin/g++
+cd llama.cpp
+if [ "$BUILD_TYPE" = "Debug" ]; then
+  # Debug build
+  cmake -B build \
+      -DGGML_CUDA=ON \
+      -DCMAKE_CUDA_ARCHITECTURES="89" \
+      -DCMAKE_BUILD_TYPE=Debug \
+      -DCMAKE_CXX_FLAGS="$EXTRA_FLAGS"
+  cmake --build build -j 16
+else
+  # Release build
+  cmake -B build -DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES="89" -DCMAKE_BUILD_TYPE=Release
+  cmake --build build --config Release -j 16
+fi
