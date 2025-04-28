@@ -3,8 +3,7 @@
 set -e
 set -x
 
-# sudo apt update
-# sudo apt install -y build-essential cmake ccache
+dir=$(cd $(dirname "$0") && pwd)
 
 BUILD_TYPE="Debug"
 EXTRA_FLAGS="-g -O0 -fno-omit-frame-pointer -fno-optimize-sibling-calls -fno-inline"
@@ -23,7 +22,7 @@ while getopts "r" opt; do
 done
 
 export CXX=/usr/bin/g++
-cd llama.cpp
+cd $dir/../llama.cpp
 if [ "$BUILD_TYPE" = "Debug" ]; then
   # Debug build
   cmake -B build \

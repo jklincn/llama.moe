@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-model_path="/home/lin/bs/myllama/deepseek-r1-q4_k_m.gguf"
+model_path="/mnt/data/gguf/deepseek-r1-q4_k_m/DeepSeek-R1-Q4_K_M.gguf"
 prompt='Please help me write a paragraph introducing Beijing.'
 n_predict=100
 n_gpu_layers=41
