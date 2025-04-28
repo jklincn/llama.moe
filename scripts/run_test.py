@@ -1,28 +1,58 @@
-import collections
+import json
 import os
 import re
 import subprocess
 import datetime
+from statistics import mean
 from prettytable import PrettyTable
+from dataclasses import dataclass, field
+from typing import List, Optional
+from pathlib import Path
 
 # 打印当前时间
-print(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+print(f"Start Time: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
 # 基本参数设置
-# simple: /mnt/data/gguf/qwen2.5-0.5b-instruct-q4_k_m.gguf
+# micro model: /mnt/data/gguf/qwen2.5-0.5b-instruct-q4_k_m.gguf
 model_path = "/mnt/data/gguf/qwen2.5-0.5b-instruct-q4_k_m.gguf"
 prompt = "Please help me write a paragraph introducing Beijing."
 n_predict = 100
-repeat = 1
+repeat = 2
 
-# 定义实验配置
-# 格式: [gpu_layers, use_cpu_exps]
+
+# 定义 Config 类
+@dataclass
+class Config:
+    gpu_layers: int
+    override: Optional[str]
+    results: List[List[float]] = field(default_factory=list)
+
+    def add_result(self, prompt_tps: float, eval_tps: float) -> None:
+        """添加一次实验结果"""
+        self.results.append([prompt_tps, eval_tps])
+
+    def get_avg_prompt_tps(self) -> Optional[float]:
+        """计算平均 prompt_tps"""
+        return mean([x[0] for x in self.results]) if self.results else None
+
+    def get_avg_eval_tps(self) -> Optional[float]:
+        """计算平均 eval_tps"""
+        return mean([x[1] for x in self.results]) if self.results else None
+
+
+# 加载 JSON 配置文件
+config_file = Path(__file__).parent / "configs.json"
+if not os.path.isfile(config_file):
+    print(f"Config file {config_file} not found.")
+    exit(1)
+
+with open(config_file, "r") as f:
+    config_data = json.load(f)
+
+# 创建 Config 实例列表
 configs = [
-    [2, False],  # 不使用 exps=CPU，gpu-layers=2
-    [10, True],  # 使用 exps=CPU，gpu-layers=10
-    [20, True],  # 使用 exps=CPU，gpu-layers=20
-    [30, True],  # 使用 exps=CPU，gpu-layers=30
-    [40, True],  # 使用 exps=CPU，gpu-layers=40
+    Config(gpu_layers=data["gpu_layers"], override=data["override"])
+    for _, data in sorted(config_data.items(), key=lambda x: int(x[0]))
 ]
 
 # 检查模型文件是否存在
@@ -34,27 +64,30 @@ if not os.path.isfile(model_path):
 table = PrettyTable()
 table.field_names = ["GPU Layer", "Override", "Prefill TPS", "Decode TPS"]
 table.align = "c"  # 居中对齐
-table.padding_width = 2  # 单元格内边距
+table.padding_width = 2
 
-# 初始化结果存储，使用元组作为键
-result = collections.defaultdict(list)
 
-def extract_tps(output):
+def extract_tps(output: str) -> tuple[Optional[float], Optional[float]]:
     """从输出中提取 prompt 和 eval 的 TPS"""
-    prompt_tps_match = re.search(r"prompt eval time =.*?(\d+\.\d+) tokens per second", output)
-    eval_tps_match = re.search(r"eval time =.*?runs.*?(\d+\.\d+) tokens per second", output)
-    
+    prompt_tps_match = re.search(
+        r"prompt eval time =.*?(\d+\.\d+) tokens per second", output
+    )
+    eval_tps_match = re.search(
+        r"eval time =.*?runs.*?(\d+\.\d+) tokens per second", output
+    )
+
     if not prompt_tps_match or not eval_tps_match:
-        print(f"Failed to extract TPS from output: {output[:200]}...")  # 截断长输出
+        print(f"Failed to extract TPS from output: {output[:200]}...")
         return None, None
     return float(prompt_tps_match.group(1)), float(eval_tps_match.group(1))
 
-for i in range(repeat):
-    print(f"Repeat {i + 1}")
-    for config in configs:
-        gpu_layers, use_cpu_exps = config
-        print(f"GPU Layer: {gpu_layers}, Override: {use_cpu_exps}")
 
+# 运行实验
+for i in range(repeat):
+    for config in configs:
+        print(f"[{i+1}/{repeat}] GPU Layer: {config.gpu_layers}, Override: {config.override}")
+
+        # fmt: off
         # 构建命令
         cmd = [
             "llama.cpp/build/bin/llama-cli",
@@ -62,23 +95,25 @@ for i in range(repeat):
             "--prompt", prompt,
             "--seed", str(0),
             "--n-predict", str(n_predict),
-            "--n-gpu-layers", str(gpu_layers),
+            "--n-gpu-layers", str(config.gpu_layers),
             "--single-turn",
         ]
-        if use_cpu_exps:
-            cmd.extend(["-ot", "exps=CPU"])
+        # fmt: on
+
+        if config.override is not None:
+            cmd.extend(["-ot", config.override])
 
         # 运行命令并捕获输出
         process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         stdout_bin, stderr_bin = process.communicate()
 
-        # 解码输出，忽略错误
+        # 解码输出
         try:
-            stdout = stdout_bin.decode('utf-8', errors='ignore')
+            stdout = stdout_bin.decode("utf-8", errors="ignore")
         except UnicodeDecodeError:
             stdout = ""
         try:
-            stderr = stderr_bin.decode('utf-8', errors='ignore')
+            stderr = stderr_bin.decode("utf-8", errors="ignore")
         except UnicodeDecodeError:
             stderr = ""
 
@@ -86,48 +121,44 @@ for i in range(repeat):
         prompt_tps, eval_tps = extract_tps(output)
 
         if prompt_tps is not None and eval_tps is not None:
-            # 使用元组作为键
-            config_key = tuple(config)
-            result[config_key].append([prompt_tps, eval_tps])
+            config.add_result(prompt_tps, eval_tps)
         else:
-            print(f"Skipping config {config} due to TPS extraction failure.")
+            print(
+                f"Skipping config {config.gpu_layers, config.override} due to TPS extraction failure."
+            )
 
 # 输出结果
-base_config = tuple(configs[0])  # 第一个配置作为基准
-base_prompt_tps = None
-base_eval_tps = None
+base_config = configs[0]  # 第一个配置作为基准
+base_prompt_tps = base_config.get_avg_prompt_tps()
+base_eval_tps = base_config.get_avg_eval_tps()
 
-# 获取基准值
-if base_config in result and result[base_config]:
-    prompt_tps_values = [x[0] for x in result[base_config]]
-    eval_tps_values = [x[1] for x in result[base_config]]
-    base_prompt_tps = sum(prompt_tps_values) / len(prompt_tps_values)
-    base_eval_tps = sum(eval_tps_values) / len(eval_tps_values)
-
+# 生成表格
 for config in configs:
-    config_key = tuple(config)
-    gpu_layers, use_cpu_exps = config
-    if config_key in result and result[config_key]:
-        prompt_tps_values = [x[0] for x in result[config_key]]
-        eval_tps_values = [x[1] for x in result[config_key]]
-        avg_prompt_tps = sum(prompt_tps_values) / len(prompt_tps_values)
-        avg_eval_tps = sum(eval_tps_values) / len(eval_tps_values)
-        
+    avg_prompt_tps = config.get_avg_prompt_tps()
+    avg_eval_tps = config.get_avg_eval_tps()
+
+    if avg_prompt_tps is not None and avg_eval_tps is not None:
         # 计算百分比
         if base_prompt_tps and base_eval_tps:
             prompt_percent = round((avg_prompt_tps / base_prompt_tps) * 100)
             eval_percent = round((avg_eval_tps / base_eval_tps) * 100)
-            prompt_tps_str = f"{avg_prompt_tps:.2f} ({prompt_percent}%)"
-            eval_tps_str = f"{avg_eval_tps:.2f} ({eval_percent}%)"
+            prompt_tps_str = f"{avg_prompt_tps:.2f}({prompt_percent}%)"
+            eval_tps_str = f"{avg_eval_tps:.2f}({eval_percent}%)"
         else:
-            # 如果没有基准值，显示 N/A
             prompt_tps_str = f"{avg_prompt_tps:.2f}(N/A)"
             eval_tps_str = f"{avg_eval_tps:.2f}(N/A)"
-        
-        table.add_row([gpu_layers, str(use_cpu_exps), prompt_tps_str, eval_tps_str])
-    else:
-        table.add_row([gpu_layers, str(use_cpu_exps), "N/A", "N/A"])
 
-print(table)
-print("\nAll experiments completed.")
-print(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+        table.add_row(
+            [
+                config.gpu_layers,
+                str(config.override),
+                prompt_tps_str,
+                eval_tps_str,
+            ]
+        )
+    else:
+        table.add_row([config.gpu_layers, str(config.override), "N/A", "N/A"])
+
+print("All experiments completed.")
+print(f"Finish Time: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+print({table})

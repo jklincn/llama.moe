@@ -1,0 +1,22 @@
+{
+    "1": {
+        "gpu_layers": 2,
+        "override": null
+    },
+    "2": {
+        "gpu_layers": 10,
+        "override": "exps=CPU"
+    },
+    "3": {
+        "gpu_layers": 20,
+        "override": "exps=CPU"
+    },
+    "4": {
+        "gpu_layers": 30,
+        "override": "exps=CPU"
+    },
+    "5": {
+        "gpu_layers": 40,
+        "override": "exps=CPU"
+    }
+}
