@@ -19,7 +19,7 @@ model_path = "/mnt/data/gguf/DeepSeek-R1-Q4_K_M.gguf"
 
 prompt = "Please help me write a paragraph introducing Beijing."
 n_predict = 100
-repeat = 2
+repeat = 5
 
 
 # 定义 Config 类
@@ -27,6 +27,7 @@ repeat = 2
 class Config:
     gpu_layers: int
     override: Optional[str]
+    test: bool
     results: List[List[float]] = field(default_factory=list)
 
     def add_result(self, prompt_tps: float, eval_tps: float) -> None:
@@ -53,9 +54,10 @@ with open(config_file, "r") as f:
 
 # 创建 Config 实例列表
 configs = [
-    Config(gpu_layers=data["gpu_layers"], override=data["override"])
-    for _, data in sorted(config_data.items(), key=lambda x: int(x[0]))
+    Config(gpu_layers=data["gpu_layers"], override=data["override"], test=data["test"])
+    for data in config_data
 ]
+
 
 # 检查模型文件是否存在
 if not os.path.isfile(model_path):
@@ -87,7 +89,12 @@ def extract_tps(output: str) -> tuple[Optional[float], Optional[float]]:
 # 运行实验
 for i in range(repeat):
     for config in configs:
-        print(f"[{i+1}/{repeat}] GPU Layer: {config.gpu_layers}, Override: {config.override}")
+        print(
+            f"[{i + 1}/{repeat}] GPU Layer: {config.gpu_layers}, Override: {config.override}"
+        )
+        if not config.test:
+            print("      skip")
+            continue
 
         # fmt: off
         # 构建命令
@@ -130,7 +137,7 @@ for i in range(repeat):
             )
 
 # 输出结果
-base_config = configs[0]  # 第一个配置作为基准
+base_config = configs[1]  # 第一个配置作为基准
 base_prompt_tps = base_config.get_avg_prompt_tps()
 base_eval_tps = base_config.get_avg_eval_tps()
 
@@ -163,4 +170,4 @@ for config in configs:
 
 print("All experiments completed.")
 print(f"Finish Time: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-print({table})
+print(table)

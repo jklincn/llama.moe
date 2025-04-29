@@ -1,22 +1,32 @@
-{
-    "1": {
+[
+    {
+        "gpu_layers": 0,
+        "override": null,
+        "test": true
+    },
+    {
         "gpu_layers": 2,
-        "override": null
+        "override": null,
+        "test": true
     },
-    "2": {
+    {
         "gpu_layers": 10,
-        "override": "exps=CPU"
+        "override": "exps=CPU",
+        "test": true
     },
-    "3": {
+    {
         "gpu_layers": 20,
-        "override": "exps=CPU"
+        "override": "exps=CPU",
+        "test": true
     },
-    "4": {
+    {
         "gpu_layers": 30,
-        "override": "exps=CPU"
+        "override": "exps=CPU",
+        "test": true
     },
-    "5": {
+    {
         "gpu_layers": 40,
-        "override": "exps=CPU"
+        "override": "exps=CPU",
+        "test": true
     }
-}
+]
