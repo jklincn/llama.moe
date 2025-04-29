@@ -17,5 +17,5 @@ pip install -r requirements.txt
 ## llama.cpp
 
 ```
-scripts/build.sh # append -r for release build
+scripts/build.sh  # append -r for release build
 ```

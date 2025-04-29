@@ -11,7 +11,7 @@
             "program": "${workspaceFolder}/llama.cpp/build/bin/llama-cli",
             "args": [
                 "-m",
-                "/mnt/data/gguf/deepseek-r1-q4_k_m/DeepSeek-R1-Q4_K_M.gguf",
+                "/mnt/data/gguf/DeepSeek-R1-Q4_K_M.gguf",
                 "--prompt",
                 "Once upon a time",
                 "--seed",

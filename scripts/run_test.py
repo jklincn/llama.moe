@@ -14,7 +14,9 @@ print(f"Start Time: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
 # 基本参数设置
 # micro model: /mnt/data/gguf/qwen2.5-0.5b-instruct-q4_k_m.gguf
-model_path = "/mnt/data/gguf/qwen2.5-0.5b-instruct-q4_k_m.gguf"
+# big model: /mnt/data/gguf/DeepSeek-R1-Q4_K_M.gguf
+model_path = "/mnt/data/gguf/DeepSeek-R1-Q4_K_M.gguf"
+
 prompt = "Please help me write a paragraph introducing Beijing."
 n_predict = 100
 repeat = 2
