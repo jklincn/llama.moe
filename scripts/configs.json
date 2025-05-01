@@ -1,32 +1,40 @@
-[
-    {
-        "gpu_layers": 0,
-        "override": null,
-        "test": true
+{
+    "settings": {
+        "model_path": "/mnt/data/gguf/qwen2.5-0.5b-instruct-q4_k_m.gguf",
+        "prompt": "Please help me write a paragraph introducing Beijing.",
+        "n_predict": 100,
+        "repeat": 1
     },
-    {
-        "gpu_layers": 2,
-        "override": null,
-        "test": true
-    },
-    {
-        "gpu_layers": 10,
-        "override": "exps=CPU",
-        "test": true
-    },
-    {
-        "gpu_layers": 20,
-        "override": "exps=CPU",
-        "test": true
-    },
-    {
-        "gpu_layers": 30,
-        "override": "exps=CPU",
-        "test": true
-    },
-    {
-        "gpu_layers": 40,
-        "override": "exps=CPU",
-        "test": true
-    }
-]
+    "configs": [
+        {
+            "gpu_layers": 0,
+            "override": null,
+            "test": true
+        },
+        {
+            "gpu_layers": 2,
+            "override": null,
+            "test": true
+        },
+        {
+            "gpu_layers": 10,
+            "override": "exps=CPU",
+            "test": true
+        },
+        {
+            "gpu_layers": 20,
+            "override": "exps=CPU",
+            "test": true
+        },
+        {
+            "gpu_layers": 30,
+            "override": "exps=CPU",
+            "test": true
+        },
+        {
+            "gpu_layers": 40,
+            "override": "exps=CPU",
+            "test": true
+        }
+    ]
+}
