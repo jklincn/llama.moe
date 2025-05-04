@@ -1,40 +1,47 @@
 {
     "settings": {
-        "model_path": "/mnt/data/gguf/qwen2.5-0.5b-instruct-q4_k_m.gguf",
+        "model_path": "/mnt/data/gguf/DeepSeek-R1-Q4_K_M.gguf",
         "prompt": "Please help me write a paragraph introducing Beijing.",
         "n_predict": 100,
-        "repeat": 1
+        "ctx_size": 1024,
+        "repeat": 2
     },
     "configs": [
         {
-            "gpu_layers": 0,
-            "override": null,
-            "test": true
+            "description": "No offload to GPU",
+            "test": false
         },
         {
             "gpu_layers": 2,
             "override": null,
-            "test": true
+            "test": false
         },
         {
             "gpu_layers": 10,
             "override": "exps=CPU",
-            "test": true
+            "test": false
         },
         {
             "gpu_layers": 20,
             "override": "exps=CPU",
-            "test": true
+            "test": false
         },
         {
             "gpu_layers": 30,
             "override": "exps=CPU",
-            "test": true
+            "test": false
         },
         {
             "gpu_layers": 40,
             "override": "exps=CPU",
-            "test": true
+            "test": true,
+            "output": false
+        },
+        {
+            "gpu_layers": 999,
+            "override": "exps=CPU",
+            "test": true,
+            "output": false
         }
     ]
 }

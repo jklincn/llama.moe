@@ -1,45 +1,53 @@
+import datetime
 import json
-import os
 import re
 import subprocess
-import datetime
-from statistics import mean
-from prettytable import PrettyTable
 from dataclasses import dataclass, field
-from typing import List, Optional
 from pathlib import Path
+from statistics import mean
+from typing import List, Optional, Tuple
+
+import tomllib
+from prettytable import PrettyTable
 
 
 @dataclass
 class Config:
-    gpu_layers: int
-    override: Optional[str]
-    test: bool
+    description: Optional[str] = None
+    gpu_layers: int = 0
+    override: Optional[str] = None
+    test: bool = False
+    output: bool = False
+    no_kv_offload: bool = False
+
     results: List[List[float]] = field(default_factory=list)
 
     def add_result(self, prompt_tps: float, eval_tps: float) -> None:
-        """添加一次实验结果"""
         self.results.append([prompt_tps, eval_tps])
 
     def get_avg_prompt_tps(self) -> Optional[float]:
-        """计算平均 prompt_tps"""
         return mean([x[0] for x in self.results]) if self.results else None
 
     def get_avg_eval_tps(self) -> Optional[float]:
-        """计算平均 eval_tps"""
         return mean([x[1] for x in self.results]) if self.results else None
 
 
 def load_config(
     config_file: Path = Path(__file__).parent / "configs.json",
-) -> tuple[dict, List[Config]]:
-    """加载 JSON 配置文件并创建 Config 实例"""
-    if not os.path.isfile(config_file):
+) -> Tuple[dict, List[Config]]:
+    if not config_file.is_file():
         print(f"Config file {config_file} not found.")
         exit(1)
 
-    with open(config_file, "r") as f:
-        config_data = json.load(f)
+    try:
+        with open(config_file, "r") as f:
+            config_data = json.load(f)
+    except json.JSONDecodeError as e:
+        print(f"Error decoding JSON from {config_file}: {e}")
+        exit(1)
+    except Exception as e:
+        print(f"Error reading config file {config_file}: {e}")
+        exit(1)
 
     if (
         not isinstance(config_data, dict)
@@ -50,21 +58,36 @@ def load_config(
         exit(1)
 
     settings = config_data["settings"]
-    if not os.path.isfile(settings["model_path"]):
-        print(f"Model {settings['model_path']} not found.")
+    if not Path(settings.get("model_path", "")).is_file():
+        model_path = settings.get("model_path", "Not specified")
+        print(f"Model {model_path} not found or path not specified in settings.")
         exit(1)
 
-    configs = [
-        Config(
-            gpu_layers=data["gpu_layers"], override=data["override"], test=data["test"]
+    configs = []
+    for i, data in enumerate(config_data.get("configs", [])):
+        if not isinstance(data, dict):
+            print(
+                f"Warning: Item at index {i} in 'configs' is not a dictionary. Skipping."
+            )
+            continue
+        try:
+            config_entry = Config(**data)
+            configs.append(config_entry)
+        except Exception as e:
+            print(
+                f"Unexpected error processing config data at index {i}: {data}. Error: {e}"
+            )
+            continue
+
+    if not configs and config_data.get("configs") is not None:
+        print(
+            "Warning: 'configs' list exists but contains no valid configuration entries."
         )
-        for data in config_data["configs"]
-    ]
+
     return settings, configs
 
 
 def extract_tps(output: str) -> tuple[Optional[float], Optional[float]]:
-    """从输出中提取 prompt 和 eval 的 TPS"""
     prompt_tps_match = re.search(
         r"prompt eval time =.*?(\d+\.\d+) tokens per second", output
     )
@@ -73,17 +96,17 @@ def extract_tps(output: str) -> tuple[Optional[float], Optional[float]]:
     )
 
     if not prompt_tps_match or not eval_tps_match:
-        print(f"Failed to extract TPS from output: {output[:200]}...")
+        print(f"Failed to extract TPS from output: {output}...")
         return None, None
     return float(prompt_tps_match.group(1)), float(eval_tps_match.group(1))
 
 
 def run_experiment(settings: dict, configs: List[Config]) -> None:
-    """运行实验，遍历所有配置并记录结果"""
     model_path = settings["model_path"]
     prompt = settings["prompt"]
     n_predict = settings["n_predict"]
     repeat = settings["repeat"]
+    ctx_size = settings["ctx_size"]
 
     for i in range(repeat):
         for config in configs:
@@ -101,6 +124,7 @@ def run_experiment(settings: dict, configs: List[Config]) -> None:
                 "--prompt", prompt,
                 "--seed", str(0),
                 "--n-predict", str(n_predict),
+                "--ctx-size", str(ctx_size),
                 "--n-gpu-layers", str(config.gpu_layers),
                 "--single-turn",
             ]
@@ -108,7 +132,9 @@ def run_experiment(settings: dict, configs: List[Config]) -> None:
 
             if config.override is not None:
                 cmd.extend(["-ot", config.override])
-
+            if config.no_kv_offload:
+                cmd.append("--no-kv-offload")
+            
             process = subprocess.Popen(
                 cmd,
                 stdout=subprocess.PIPE,
@@ -119,6 +145,9 @@ def run_experiment(settings: dict, configs: List[Config]) -> None:
             )
             stdout, stderr = process.communicate()
             output = stdout + stderr
+
+            if config.output:
+                print(output)
 
             prompt_tps, eval_tps = extract_tps(output)
 
@@ -131,7 +160,6 @@ def run_experiment(settings: dict, configs: List[Config]) -> None:
 
 
 def generate_results_table(configs: List[Config]) -> PrettyTable:
-    """生成并返回结果表格"""
     table = PrettyTable()
     table.field_names = ["GPU Layer", "Override", "Prefill TPS", "Decode TPS"]
     table.align = "c"
@@ -164,7 +192,6 @@ def generate_results_table(configs: List[Config]) -> PrettyTable:
 
 
 def main():
-    """主函数，协调整个实验流程"""
     print(f"Start Time: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
     settings, configs = load_config()
