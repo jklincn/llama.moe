@@ -1,5 +1,5 @@
 [settings]
-repeat = 5
+repeat = 3
 
 [base_config]
 description = "Base Configuration Defaults"
@@ -26,6 +26,7 @@ run = true
 description = "Offload 2 layers"
 run = true
 baseline = true
+output = true
 [configs.args]
 n-gpu-layers = 2
 
@@ -38,14 +39,14 @@ override-tensor = "exps=CPU"
 
 [[configs]]
 description = "Offload 20 layers, override exps=CPU"
-run = false
+run = true
 [configs.args]
 n-gpu-layers = 20
 override-tensor = "exps=CPU"
 
 [[configs]]
 description = "Offload 30 layers, override exps=CPU"
-run = false
+run = true
 [configs.args]
 n-gpu-layers = 30
 override-tensor = "exps=CPU"

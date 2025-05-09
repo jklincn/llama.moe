@@ -24,10 +24,12 @@ class Config:
         self.results.append([prompt_tps, eval_tps])
 
     def get_avg_prompt_tps(self) -> Optional[float]:
-        return mean([x[0] for x in self.results]) if self.results else None
+        valid_values = [x[0] for x in self.results if x[0] is not None]
+        return mean(valid_values) if len(valid_values) > 0 else None
 
     def get_avg_eval_tps(self) -> Optional[float]:
-        return mean([x[1] for x in self.results]) if self.results else None
+        valid_values = [x[1] for x in self.results if x[1] is not None]
+        return mean(valid_values) if len(valid_values) > 0 else None
 
 
 def load_config(
@@ -125,6 +127,8 @@ def run_experiment(settings: dict, configs: List[Config]) -> None:
         for config in configs:
             if not config.run:
                 continue
+            
+            print(f"[{i + 1}/{repeat}] {config.description}")
 
             cmd = [
                 "llama.cpp/build/bin/llama-cli",
