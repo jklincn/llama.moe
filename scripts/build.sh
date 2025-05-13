@@ -24,6 +24,8 @@ done
 export CXX=/usr/bin/g++
 cd $dir/../llama.cpp
 if [ "$BUILD_TYPE" = "Debug" ]; then
+  # GGML Debug config
+  sed -i "s/#define GGML_DEBUG 0/#define GGML_DEBUG 1/g" ggml/src/ggml-impl.h
   # Debug build
   cmake -B build \
       -DGGML_CUDA=ON \
@@ -31,6 +33,7 @@ if [ "$BUILD_TYPE" = "Debug" ]; then
       -DCMAKE_BUILD_TYPE=Debug \
       -DCMAKE_CXX_FLAGS="$EXTRA_FLAGS"
   cmake --build build -j 16
+  sed -i "s/#define GGML_DEBUG 1/#define GGML_DEBUG 0/g" ggml/src/ggml-impl.h
 else
   # Release build
   cmake -B build -DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES="89" -DCMAKE_BUILD_TYPE=Release

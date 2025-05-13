@@ -1,6 +1,7 @@
 import logging
 import sys
 from gguf.gguf_reader import GGUFReader
+from pathlib import Path
 
 logger = logging.getLogger("reader")
 
@@ -34,7 +35,11 @@ def read_gguf_file(gguf_file_path):
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        logger.info("Usage: python gguf_print.py <path_to_gguf_file>")
+        logger.info("Default: /mnt/data/gguf/DeepSeek-R1-Q4_K_M.gguf")
+        gguf_file_path = Path("/mnt/data/gguf/DeepSeek-R1-Q4_K_M.gguf")
+    else:
+        gguf_file_path = Path(sys.argv[1])
+    if not gguf_file_path.is_file():
+        logger.error(f"File not found: {gguf_file_path}")
         sys.exit(1)
-    gguf_file_path = sys.argv[1]
     read_gguf_file(gguf_file_path)
