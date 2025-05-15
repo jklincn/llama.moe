@@ -2,6 +2,7 @@ import copy
 import datetime
 import re
 import subprocess
+import sys
 from dataclasses import dataclass, field, fields
 from pathlib import Path
 from statistics import mean
@@ -9,6 +10,36 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import tomllib
 from prettytable import PrettyTable
+
+# Global log file path
+OUTPUT_FILE = "output.txt"
+
+
+class Tee:
+    """A simple tee object that duplicates writes to multiple streams."""
+
+    def __init__(self, *streams):
+        self.streams = streams
+
+    def write(self, data):
+        for s in self.streams:
+            s.write(data)
+        self.flush()
+
+    def flush(self):
+        for s in self.streams:
+            s.flush()
+
+
+def setup_logging(log_path: str) -> None:
+    """Redirects all `print` statements to both the terminal and a log file."""
+
+    Path(OUTPUT_FILE).write_text("")
+    handle = open(log_path, "a", encoding="utf-8")
+
+    # Duplicate stdout/stderr so every print is written to both places
+    sys.stdout = Tee(sys.__stdout__, handle)
+    sys.stderr = Tee(sys.__stderr__, handle)
 
 
 @dataclass
@@ -24,11 +55,16 @@ class Config:
 
     def get_avg_prompt_tps(self) -> Optional[float]:
         valid_values = [x[0] for x in self.results if x[0] is not None]
-        return mean(valid_values) if len(valid_values) > 0 else None
+        return mean(valid_values) if valid_values else None
 
     def get_avg_eval_tps(self) -> Optional[float]:
         valid_values = [x[1] for x in self.results if x[1] is not None]
-        return mean(valid_values) if len(valid_values) > 0 else None
+        return mean(valid_values) if valid_values else None
+
+
+# ---------------------------------------------------------------------------
+# Configuration helpers
+# ---------------------------------------------------------------------------
 
 
 def load_config(
@@ -63,39 +99,35 @@ def load_config(
     base_config = Config(**base_config_data)
     configs: List[Config] = []
 
-    # 处理配置列表 [[configs]]
+    # Handle [[configs]] overrides
     configs_data = data.get("configs", [])
     if not configs_data:
         print("Warning: No override configurations found in [configs] section.")
 
-    # 遍历覆盖配置列表
     for i, override_data in enumerate(configs_data):
         if not isinstance(override_data, dict):
             print(f"Error: [configs] section {i} is not a valid table (dictionary).")
             exit(1)
 
-        # 创建一个新的配置对象，首先复制基础配置的所有属性
-        config_dict = {}
-        for field_ in fields(base_config):
-            # 复制基础配置的值
-            config_dict[field_.name] = copy.deepcopy(getattr(base_config, field_.name))
+        # Start with a deep‑copy of the base config
+        config_dict: Dict[str, Any] = {
+            field_.name: copy.deepcopy(getattr(base_config, field_.name))
+            for field_ in fields(base_config)
+        }
 
-        # 然后应用覆盖配置
+        # Apply overrides (merge `args` instead of replacing)
         for key, value in override_data.items():
             if key == "args" and isinstance(value, dict):
-                # 对于args字段，我们需要合并而不是替换
-                config_dict["args"] = {**config_dict["args"], **value}
+                config_dict["args"].update(value)
             else:
-                # 对于其他字段，直接覆盖
                 config_dict[key] = value
 
-        # 创建新的配置对象
         override_config = Config(**config_dict)
         configs.append(override_config)
         print(
             f"Found config: {override_config.description}"
-            f"{' (run)' if override_config.run else ' (skip)'}"
-            f"{' (baselince)' if override_config.baseline else ''}"
+            f" {'(run)' if override_config.run else '(skip)'}"
+            f" {'(baseline)' if override_config.baseline else ''}"
         )
 
     if not configs:
@@ -105,7 +137,12 @@ def load_config(
     return settings, configs
 
 
-def extract_tps(output: str) -> tuple[Optional[float], Optional[float]]:
+# ---------------------------------------------------------------------------
+# Experiment runner & helpers
+# ---------------------------------------------------------------------------
+
+
+def extract_tps(output: str) -> Tuple[Optional[float], Optional[float]]:
     prompt_tps_match = re.search(
         r"prompt eval time =.*?(\d+\.\d+) tokens per second", output
     )
@@ -115,19 +152,20 @@ def extract_tps(output: str) -> tuple[Optional[float], Optional[float]]:
 
     if not prompt_tps_match or not eval_tps_match:
         print(f"Failed to extract TPS from output:\n{output}")
-        return None, None
+        exit(1)
+
     return float(prompt_tps_match.group(1)), float(eval_tps_match.group(1))
 
 
 def run_experiment(settings: dict, configs: List[Config]) -> None:
-    output_file = "output.txt"
-    open(output_file, "w").close()
+    print(f"Start Time: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+
     repeat = settings["repeat"]
     for i in range(repeat):
         for config in configs:
             if not config.run:
                 continue
-            
+
             header = f"[{i + 1}/{repeat}] {config.description}"
             print(header)
 
@@ -153,13 +191,13 @@ def run_experiment(settings: dict, configs: List[Config]) -> None:
                 text=True,
                 encoding="utf-8",
                 errors="replace",
-                bufsize=1
+                bufsize=1,
             )
-            
-            output_lines = []
-            with open(output_file, "a", encoding="utf-8") as f:
-                f.write(header + "\n")
-                for line in iter(process.stdout.readline, ''):
+
+            output_lines: List[str] = []
+            # Only write *process* output to the log file; do not echo to terminal
+            with open(OUTPUT_FILE, "a", encoding="utf-8") as f:
+                for line in iter(process.stdout.readline, ""):
                     f.write(line)
                     output_lines.append(line)
                 f.write("=" * 80 + "\n")
@@ -170,8 +208,11 @@ def run_experiment(settings: dict, configs: List[Config]) -> None:
             prompt_tps, eval_tps = extract_tps(output_str)
             config.add_result(prompt_tps, eval_tps)
 
+    print("All experiments completed.")
+    print(f"Finish Time: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
-def generate_results_table(configs: List[Config]) -> PrettyTable:
+
+def show_results(configs: List[Config]):
     table = PrettyTable()
     table.field_names = ["Description", "Prefill TPS", "Decode TPS"]
     table.align = "c"
@@ -189,6 +230,7 @@ def generate_results_table(configs: List[Config]) -> PrettyTable:
         if config.run:
             avg_prompt_tps = config.get_avg_prompt_tps()
             avg_eval_tps = config.get_avg_eval_tps()
+
             if base_prompt_tps and base_eval_tps:
                 prompt_percent = round((avg_prompt_tps / base_prompt_tps) * 100)
                 eval_percent = round((avg_eval_tps / base_eval_tps) * 100)
@@ -197,22 +239,23 @@ def generate_results_table(configs: List[Config]) -> PrettyTable:
             else:
                 prompt_tps_str = f"{avg_prompt_tps:.2f}(N/A)"
                 eval_tps_str = f"{avg_eval_tps:.2f}(N/A)"
+
             table.add_row([config.description, prompt_tps_str, eval_tps_str])
 
-    return table
+    print(table)
 
 
-def main():
-    print(f"Start Time: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+# ---------------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------------
+
+
+def main() -> None:
+    setup_logging(OUTPUT_FILE)
 
     settings, configs = load_config()
-
     run_experiment(settings, configs)
-
-    table = generate_results_table(configs)
-    print("All experiments completed.")
-    print(f"Finish Time: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print(table)
+    show_results(configs)
 
 
 if __name__ == "__main__":

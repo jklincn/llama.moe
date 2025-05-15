@@ -1,5 +1,5 @@
 [settings]
-repeat = 1
+repeat = 5
 
 [base_config]
 description = "Base Configuration Defaults"
