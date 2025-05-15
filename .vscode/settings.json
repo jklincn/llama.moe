@@ -1,5 +1,5 @@
 {
     "clangd.arguments": [
-        "--query-driver=/usr/bin/g++",
+        "--query-driver=/usr/bin/cc,/usr/bin/c++,/usr/bin/gcc,/usr/bin/g++",
     ]
 }

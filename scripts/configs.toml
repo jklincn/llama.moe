@@ -1,11 +1,10 @@
 [settings]
-repeat = 3
+repeat = 1
 
 [base_config]
 description = "Base Configuration Defaults"
 run = false
 baseline = false
-output = false
 
 [base_config.args]
 model = "/mnt/data/gguf/DeepSeek-R1-Q4_K_M.gguf"
@@ -26,7 +25,6 @@ run = true
 description = "Offload 2 layers"
 run = true
 baseline = true
-output = true
 [configs.args]
 n-gpu-layers = 2
 

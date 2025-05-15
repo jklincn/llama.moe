@@ -16,7 +16,6 @@ class Config:
     description: Optional[str] = None
     run: bool = False
     baseline: bool = False
-    output: bool = False
     args: Dict[str, Any] = field(default_factory=dict)
     results: List[List[float]] = field(default_factory=list)
 
@@ -121,14 +120,16 @@ def extract_tps(output: str) -> tuple[Optional[float], Optional[float]]:
 
 
 def run_experiment(settings: dict, configs: List[Config]) -> None:
+    output_file = "output.txt"
+    open(output_file, "w").close()
     repeat = settings["repeat"]
-
     for i in range(repeat):
         for config in configs:
             if not config.run:
                 continue
             
-            print(f"[{i + 1}/{repeat}] {config.description}")
+            header = f"[{i + 1}/{repeat}] {config.description}"
+            print(header)
 
             cmd = [
                 "llama.cpp/build/bin/llama-cli",
@@ -148,18 +149,25 @@ def run_experiment(settings: dict, configs: List[Config]) -> None:
             process = subprocess.Popen(
                 cmd,
                 stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
                 text=True,
                 encoding="utf-8",
                 errors="replace",
+                bufsize=1
             )
-            stdout, stderr = process.communicate()
-            output = stdout + stderr
+            
+            output_lines = []
+            with open(output_file, "a", encoding="utf-8") as f:
+                f.write(header + "\n")
+                for line in iter(process.stdout.readline, ''):
+                    f.write(line)
+                    output_lines.append(line)
+                f.write("=" * 80 + "\n")
 
-            if config.output:
-                print(output)
+            process.wait()
+            output_str = "".join(output_lines)
 
-            prompt_tps, eval_tps = extract_tps(output)
+            prompt_tps, eval_tps = extract_tps(output_str)
             config.add_result(prompt_tps, eval_tps)
 
 
