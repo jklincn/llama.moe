@@ -182,7 +182,9 @@ def run_experiment(settings: dict, configs: List[Config]) -> None:
                 else:
                     cmd.append(f"--{arg}")
                     cmd.append(str(value))
-            # print(f"Command: {' '.join(cmd)}")
+
+            with open(OUTPUT_FILE, "a", encoding="utf-8") as f:
+                f.write(f"[Command]: {' '.join(cmd)}\n")
 
             process = subprocess.Popen(
                 cmd,
