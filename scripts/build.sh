@@ -37,7 +37,7 @@ cmake_args=(
     -D LLAMA_BUILD_TOOLS=ON
 #   -D LLAMA_BUILD_EXAMPLES=OFF
 #   -D LLAMA_BUILD_TESTS=OFF
-#   -D LLAMA_BUILD_SERVER=OFF
+    -D LLAMA_BUILD_SERVER=ON
 )
 
 [[ -n "${extra_flags}" ]] && cmake_args+=( -D CMAKE_CXX_FLAGS="${extra_flags}" )
@@ -48,16 +48,16 @@ cmake_args=(
 pushd "${repo_root}" >/dev/null
 rm -rf build
 if [[ "${build_type}" == "Debug" ]]; then
-    sed -i 's/#define GGML_DEBUG 0/#define GGML_DEBUG 1/' ggml/src/ggml-impl.h
+    # sed -i 's/#define GGML_DEBUG 0/#define GGML_DEBUG 1/' ggml/src/ggml-impl.h
 elif [[ "${build_type}" == "Release" ]]; then
-    sed -i 's/#define GGML_DEBUG 1/#define GGML_DEBUG 0/' ggml/src/ggml-impl.h
+    # sed -i 's/#define GGML_DEBUG 1/#define GGML_DEBUG 0/' ggml/src/ggml-impl.h
 fi
 
 # ----------------------------------------------------------------------
-# 5. 配置 & 构建（只编译 llama-cli）
+# 5. 配置 & 构建
 # ----------------------------------------------------------------------
 cmake "${cmake_args[@]}"
-cmake --build "${build_dir}" --target llama-cli
+cmake --build "${build_dir}"
 
-echo -e "\n✔  Build finished: ${build_type} (target: llama-cli)"
+echo -e "\n✔  Build finished: ${build_type}"
 popd >/dev/null

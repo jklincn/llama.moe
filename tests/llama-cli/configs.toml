@@ -18,7 +18,7 @@ override-tensor = ""
 
 [[configs]]
 description = "No offload to GPU"
-run = true
+run = false
 [configs.args]
 
 [[configs]]
@@ -30,21 +30,21 @@ n-gpu-layers = 2
 
 [[configs]]
 description = "Offload 10 layers, override exps=CPU"
-run = true
+run = false
 [configs.args]
 n-gpu-layers = 10
 override-tensor = "exps=CPU"
 
 [[configs]]
 description = "Offload 20 layers, override exps=CPU"
-run = true
+run = false
 [configs.args]
 n-gpu-layers = 20
 override-tensor = "exps=CPU"
 
 [[configs]]
 description = "Offload 30 layers, override exps=CPU"
-run = true
+run = false
 [configs.args]
 n-gpu-layers = 30
 override-tensor = "exps=CPU"

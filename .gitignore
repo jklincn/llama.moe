@@ -1,2 +1,5 @@
 *.gguf
 output.txt
+*.log
+
+__pycache__/
