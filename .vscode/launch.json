@@ -24,7 +24,31 @@
                 "999",
                 "--single-turn",
                 "-ot",
+                "exps=CPU"
+            ],
+            "cwd": "${workspaceFolder}",
+            "stopOnEntry": false
+        },
+        {
+            "name": "LLDB: Debug llama-server",
+            "type": "lldb",
+            "request": "launch",
+            "program": "${workspaceFolder}/llama.cpp/build/bin/llama-server",
+            "args": [
+                "--model",
+                "/mnt/data/gguf/DeepSeek-R1-Q4_K_M.gguf",
+                "--port",
+                "8088",
+                "--seed",
+                "0",
+                "--ctx-size",
+                "1024",
+                "--override-tensor",
                 "exps=CPU",
+                "--n-gpu-layers",
+                "999",
+                "--metrics",
+                "--slots"
             ],
             "cwd": "${workspaceFolder}",
             "stopOnEntry": false

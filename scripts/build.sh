@@ -49,8 +49,10 @@ pushd "${repo_root}" >/dev/null
 rm -rf build
 if [[ "${build_type}" == "Debug" ]]; then
     # sed -i 's/#define GGML_DEBUG 0/#define GGML_DEBUG 1/' ggml/src/ggml-impl.h
+    :
 elif [[ "${build_type}" == "Release" ]]; then
     # sed -i 's/#define GGML_DEBUG 1/#define GGML_DEBUG 0/' ggml/src/ggml-impl.h
+    :
 fi
 
 # ----------------------------------------------------------------------

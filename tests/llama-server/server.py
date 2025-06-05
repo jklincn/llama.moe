@@ -1,5 +1,10 @@
 import os
+import signal
 import subprocess
+import sys
+import time
+
+import requests
 
 
 class LlamaServer:
@@ -78,7 +83,6 @@ class LlamaServer:
         logfile = open(log_file, "w")
         self.process = subprocess.Popen(cmd, stdout=logfile, stderr=logfile)
 
-
         print(f"[LlamaServer] Starting, PID: {self.process.pid}")
 
     def is_running(self):
@@ -104,3 +108,54 @@ class LlamaServer:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.stop()
+
+
+if __name__ == "__main__":
+    # 创建服务器实例
+    server = LlamaServer()
+
+    # 设置信号处理函数，用于优雅关闭
+    def signal_handler(signum, frame):
+        print(f"\n[LlamaServer] 收到信号 {signum}，正在关闭服务器...")
+        server.stop()
+        sys.exit(0)
+
+    def check_health():
+        try:
+            response = requests.get(f"http://localhost:{server.port}/health", timeout=5)
+            if response.status_code == 200:
+                print("[LlamaServer] 服务器健康状态正常")
+                return True
+        except requests.exceptions.RequestException as e:
+            print("[LlamaServer] 健康检查失败")
+            return False
+
+    # 注册信号处理器
+    signal.signal(signal.SIGINT, signal_handler)  # Ctrl+C
+    signal.signal(signal.SIGTERM, signal_handler)  # 终止信号
+
+    try:
+        # 启动服务器
+        print(f"[LlamaServer] 正在启动服务器，端口: {server.port}")
+        print(f"[LlamaServer] 模型路径: {server.model_path}")
+        print("[LlamaServer] 日志文件: llama-server.log")
+        print("[LlamaServer] 按 Ctrl+C 停止服务器")
+
+        server.start()
+
+        while True:
+            health = check_health()
+            if health:
+                time.sleep(60)
+            else:
+                time.sleep(5)
+
+        print("[LlamaServer] 服务器进程已退出")
+
+    except KeyboardInterrupt:
+        print("\n[LlamaServer] 用户中断，正在关闭服务器...")
+        server.stop()
+    except Exception as e:
+        print(f"[LlamaServer] 发生错误: {e}")
+        server.stop()
+        sys.exit(1)
