@@ -3,3 +3,5 @@ output.txt
 *.log
 
 __pycache__/
+
+moe_server_data

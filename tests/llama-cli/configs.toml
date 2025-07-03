@@ -7,7 +7,7 @@ run = false
 baseline = false
 
 [base_config.args]
-model = "/mnt/data/gguf/DeepSeek-R1-Q4_K_M.gguf"
+model = "/mnt/data/gguf/Qwen3-235B-A22B-Q8_0.gguf"
 # model = "/mnt/data/gguf/qwen2.5-0.5b-instruct-q4_k_m.gguf"
 prompt = "Please help me write a paragraph introducing Beijing."
 n-predict = 100

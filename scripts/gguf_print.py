@@ -1,7 +1,8 @@
 import logging
 import sys
-from gguf.gguf_reader import GGUFReader
 from pathlib import Path
+
+from gguf.gguf_reader import GGUFReader
 
 logger = logging.getLogger("reader")
 

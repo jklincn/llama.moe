@@ -1,2 +1,4 @@
 gguf
 prettytable
+numpy
+pandas
