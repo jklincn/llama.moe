@@ -2,3 +2,4 @@ gguf
 prettytable
 numpy
 pandas
+matplotlib

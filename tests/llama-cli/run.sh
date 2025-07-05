@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 model_path="/mnt/data/gguf/Qwen3-30B-A3B-Q8_0.gguf"
 prompt='Please help me write a paragraph introducing Beijing.'
-n_predict=2
+n_predict=4096
 n_gpu_layers=4
 
 if [ ! -f "$model_path" ]; then
@@ -14,4 +14,4 @@ llama.cpp/build/bin/llama-cli \
     --prompt "$prompt" \
     --n-predict $n_predict \
     --n-gpu-layers $n_gpu_layers \
-    --single-turn --color
+    --single-turn --color --no-warmup

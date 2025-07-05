@@ -4,4 +4,6 @@ output.txt
 
 __pycache__/
 
-moe_server_data
+expert_activation_heatmap.png
+expert_activations.csv
+expert_proportions.csv
