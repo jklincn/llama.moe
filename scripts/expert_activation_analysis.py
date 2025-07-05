@@ -62,33 +62,61 @@ def heatmap(
     print(f"[✓] 已保存热图 → {Path(out_path).resolve()}")
 
 
+def build_k_list(num_experts: int, step: int = 4) -> list[int]:
+    """生成阈值列表：0, step, 2*step, …, num_experts（含 0 与末尾）"""
+    ks = list(range(0, num_experts + 1, step))
+    if ks[-1] != num_experts:  # 若总专家数不是 step 的整数倍
+        ks.append(num_experts)
+    return ks
+
+
 def topk_proportions(
     csv_path: str = "expert_activations.csv",
-    out_csv: str = "expert_proportions.csv",
-    ks=(8, 16, 32, 64, 128),
+    out_path: str = "expert_proportions.csv",
+    step: int = 4,
 ) -> None:
     # ---------- 读取 CSV ----------
     df = pd.read_csv(csv_path)
-    layer_col = df.columns[0]  # 第一列是层号
-    acts = df.iloc[:, 1:].to_numpy()  # (num_layers, num_experts)
+    layer_col = df.columns[0]  # 第一列：层号
+    acts = df.iloc[:, 1:].to_numpy()  # shape = (L, N)
 
-    # ---------- 计算总激活与 Top-K 占比 ----------
-    total = acts.sum(axis=1, keepdims=True)  # shape = (L,1)
-    total[total == 0] = 1  # 防止除零
-    # 按行降序排序（np.sort 默认升序，前面加负号再取负即可得到降序）
-    sorted_acts = -np.sort(-acts, axis=1)
+    num_layers, num_experts = acts.shape
+    ks = build_k_list(num_experts, step)  # 0,4,8,…,N
 
+    # ---------- 总激活 & 行内降序 ----------
+    total = acts.sum(axis=1, keepdims=True).astype(float)
+    total[total == 0] = 1.0  # 防止除零
+    sorted_acts = -np.sort(-acts, axis=1)  # 行内降序
+
+    # ---------- 计算占比 ----------
     result = {layer_col: df[layer_col]}
+    ratios = []  # 收集所有层 × K 的占比，便于后续查 90 %
     for k in ks:
-        k = min(k, sorted_acts.shape[1])  # 若专家数 < K，取最大可用
-        topk_sum = sorted_acts[:, :k].sum(axis=1)
-        result[f"top{k}_ratio"] = topk_sum / total.flatten()
+        if k == 0:
+            ratio = np.zeros(num_layers)
+        else:
+            topk_sum = sorted_acts[:, :k].sum(axis=1)
+            ratio = topk_sum / total.flatten()
+        result[f"top{k}"] = ratio
+        ratios.append(ratio)  # len == len(ks)
 
+    # ---------- 计算“首个 >90 % 的 K” ----------
+    ratio_matrix = np.vstack(ratios).T  # shape = (L, len(ks))
+    first_k_over90 = []
+    for row in ratio_matrix:
+        # 找到第一个比例 > 0.9 的列索引
+        idx = np.argmax(row > 0.90)
+        if row[idx] > 0.90:
+            first_k_over90.append(ks[idx])
+        else:  # 整层都没超过 90 %
+            first_k_over90.append(np.nan)
+
+    result["first_k_over90"] = first_k_over90
+
+    # ---------- 输出 ----------
     out_df = pd.DataFrame(result)
-
-    # ---------- 保存并示例输出 ----------
-    out_df.to_csv(out_csv, index=False)
-    print(f"[✓] 已保存结果 → {Path(out_csv).resolve()}")
+    out_df.to_csv(out_path, index=False)
+    print(f"[✓] 已保存结果 → {Path(out_path).resolve()}")
 
 
 if __name__ == "__main__":
