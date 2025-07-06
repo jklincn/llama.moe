@@ -6,11 +6,19 @@ import time
 
 import requests
 
+import logging
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(
+    level=logging.INFO,
+    format="[%(asctime)s] [%(levelname)s] %(message)s",
+)
+
 
 class LlamaServer:
     def __init__(
         self,
-        model_path="/mnt/data/gguf/DeepSeek-R1-Q4_K_M.gguf",
+        model_path="/mnt/data/gguf/Qwen3-30B-A3B-Q8_0.gguf",
         server_path=None,
         port=8088,
         seed=0,
@@ -81,9 +89,11 @@ class LlamaServer:
         cmd = self.build_command()
 
         logfile = open(log_file, "w")
-        self.process = subprocess.Popen(cmd, stdout=logfile, stderr=logfile)
+        self.process = subprocess.Popen(
+            cmd, stdout=logfile, stderr=logfile, preexec_fn=os.setsid
+        )
 
-        print(f"[LlamaServer] Starting, PID: {self.process.pid}")
+        logger.info(f"正在启动, PID: {self.process.pid}")
 
     def is_running(self):
         """检查 llama-server 是否仍在运行"""
@@ -97,9 +107,9 @@ class LlamaServer:
                 self.process.wait(timeout=30)
             except subprocess.TimeoutExpired:
                 self.process.kill()
-            print("[LlamaServer] terminated.")
+            logger.info("terminated.")
         else:
-            print("[LlamaServer] not running.")
+            logger.info("not running.")
         self.process = None
 
     def __enter__(self):
@@ -116,7 +126,7 @@ if __name__ == "__main__":
 
     # 设置信号处理函数，用于优雅关闭
     def signal_handler(signum, frame):
-        print(f"\n[LlamaServer] 收到信号 {signum}，正在关闭服务器...")
+        logger.info(f"\n收到信号 {signum}，正在关闭服务器...")
         server.stop()
         sys.exit(0)
 
@@ -124,10 +134,8 @@ if __name__ == "__main__":
         try:
             response = requests.get(f"http://localhost:{server.port}/health", timeout=5)
             if response.status_code == 200:
-                print("[LlamaServer] 服务器健康状态正常")
                 return True
         except requests.exceptions.RequestException as e:
-            print("[LlamaServer] 健康检查失败")
             return False
 
     # 注册信号处理器
@@ -136,26 +144,27 @@ if __name__ == "__main__":
 
     try:
         # 启动服务器
-        print(f"[LlamaServer] 正在启动服务器，端口: {server.port}")
-        print(f"[LlamaServer] 模型路径: {server.model_path}")
-        print("[LlamaServer] 日志文件: llama-server.log")
-        print("[LlamaServer] 按 Ctrl+C 停止服务器")
+        logger.info(f"正在启动服务器，端口: {server.port}")
+        logger.info(f"模型路径: {server.model_path}")
+        logger.info("日志文件: llama-server.log")
+        logger.info("按 Ctrl+C 停止服务器")
 
         server.start()
 
         while True:
-            health = check_health()
-            if health:
-                time.sleep(60)
+            if check_health():
+                logger.info("服务器启动完成")
+                break
             else:
-                time.sleep(5)
+                time.sleep(2)
 
-        print("[LlamaServer] 服务器进程已退出")
-
-    except KeyboardInterrupt:
-        print("\n[LlamaServer] 用户中断，正在关闭服务器...")
-        server.stop()
+        while True:
+            if check_health():
+                logger.info("服务器健康状态正常")
+            else:
+                logger.info("服务器健康状态异常")
+            time.sleep(60)
     except Exception as e:
-        print(f"[LlamaServer] 发生错误: {e}")
+        logger.info(f"发生错误: {e}")
         server.stop()
         sys.exit(1)

@@ -12,7 +12,7 @@ import tomllib
 from prettytable import PrettyTable
 
 # Global log file path
-OUTPUT_FILE = "output.txt"
+OUTPUT_FILE = "llama-cli.log"
 
 
 class Tee:
@@ -245,11 +245,6 @@ def show_results(configs: List[Config]):
             table.add_row([config.description, prompt_tps_str, eval_tps_str])
 
     print(table)
-
-
-# ---------------------------------------------------------------------------
-# Entry point
-# ---------------------------------------------------------------------------
 
 
 def main() -> None:

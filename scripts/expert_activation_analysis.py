@@ -1,9 +1,3 @@
-"""
-根据 CSV 自动绘制“层 × 专家”激活次数热图
-保存为 draw_heatmap.py，确保同目录下有数据文件（默认 expert_activations.csv）
-运行：python draw_heatmap.py
-"""
-
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt

@@ -1,9 +1,9 @@
-*.gguf
-output.txt
+__pycache__/
 *.log
 
-__pycache__/
-
-expert_activation_heatmap.png
+# used by llama.cpp/ggml/src/ggml-moe.cpp
 expert_activations.csv
+
+# used by scripts/expert_activation_analysis.py
+expert_activation_heatmap.png
 expert_proportions.csv
