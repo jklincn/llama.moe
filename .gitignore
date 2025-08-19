@@ -18,3 +18,7 @@ expert_activations.csv
 # used by scripts/expert_activation_analysis.py
 expert_activation_heatmap.png
 expert_proportions.csv
+
+# used by tests/eval/*.py
+.cache/
+outputs/
