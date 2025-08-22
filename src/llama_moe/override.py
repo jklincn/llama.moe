@@ -1,49 +1,27 @@
 import argparse
+import re
+from collections import defaultdict
 from typing import Any
 
+import pynvml
 from gguf import GGUFReader
+
+LAYER_RE = re.compile(r"^blk\.(\d+)\.")
+threshold = 0.9
 
 
 def fmt_bytes(n: int) -> str:
-    """把字节数格式化成 B/KB/MB/GB/TB（十进制，便于和常见文件大小一致）"""
     units = ["B", "KB", "MB", "GB", "TB"]
     s = float(n)
     for u in units:
-        if s < 1000 or u == units[-1]:
+        if s < 1024 or u == units[-1]:
             return f"{int(s)} {u}" if u == "B" else f"{s:.2f} {u}"
-        s /= 1000.0
+        s /= 1024.0
 
 
 def pretty(val: Any, max_len: int = 200) -> str:
-    """把任意值转成短字符串，过长则截断"""
     s = val if isinstance(val, str) else repr(val)
     return s if len(s) <= max_len else s[:max_len] + f"... (len={len(s)})"
-
-
-def decode_field_value(field) -> Any:
-    """优先使用 ReaderField.contents()；不支持时回退到旧解码方式"""
-    # 新接口：自动把 STRING/ARRAY 等转成可读 Python 值（含 UTF-8 解码）
-    try:
-        return field.contents()
-    except Exception:
-        pass
-
-    # 回退：按 parts/data 取值并尽量解码
-    try:
-        import numpy as np  # 仅用于 dtype 判断，脚本运行环境中通常已安装
-
-        idx = field.data[0] if field.data else -1
-        part = field.parts[idx] if idx != -1 else field.parts[-1]
-        # 字节数组（ASCII/UTF-8）
-        if hasattr(part, "dtype") and part.dtype == np.uint8:
-            return bytes(part).decode("utf-8", "replace")
-        # 标量或数组
-        lst = part.tolist()
-        if isinstance(lst, list) and len(lst) == 1:
-            return lst[0]
-        return lst
-    except Exception:
-        return "<unreadable>"
 
 
 def read_gguf_file(gguf_file_path: str):
@@ -56,7 +34,7 @@ def read_gguf_file(gguf_file_path: str):
 
     for key in keys:
         field = reader.fields[key]
-        value = decode_field_value(field)
+        value = field.contents()
         print(f"{key:{max_key_length}} : {pretty(value)}")
 
     print("----")
@@ -72,18 +50,14 @@ def read_gguf_file(gguf_file_path: str):
     exps_count = 0
 
     for tensor in reader.tensors:
-        try:
-            dims = [int(x) for x in tensor.shape.tolist()]
-        except Exception:
-            dims = list(map(int, tensor.shape))
+        dims = [int(x) for x in tensor.shape.tolist()]
         shape_str = "x".join(map(str, dims))
 
-        nbytes = int(getattr(tensor, "n_bytes", tensor.n_elements))
-        total_bytes += nbytes
+        n_bytes = tensor.n_bytes
+        total_bytes += n_bytes
 
-        # 统计：名称含 exps 的张量
         if "exps" in tensor.name.lower():
-            exps_bytes += nbytes
+            exps_bytes += n_bytes
             exps_count += 1
 
         print(
@@ -91,7 +65,7 @@ def read_gguf_file(gguf_file_path: str):
                 tensor.name,
                 shape_str,
                 f"{tensor.n_elements:,}",
-                fmt_bytes(nbytes),
+                fmt_bytes(n_bytes),
                 tensor.tensor_type.name,
             )
         )
@@ -110,10 +84,109 @@ def read_gguf_file(gguf_file_path: str):
     )
 
 
-def main():
-    ap = argparse.ArgumentParser(
-        description="GGUF 文件分析脚本"
+def free_memory() -> int:
+    pynvml.nvmlInit()
+    handle = pynvml.nvmlDeviceGetHandleByIndex(0)
+    info = pynvml.nvmlDeviceGetMemoryInfo(handle)
+    pynvml.nvmlShutdown()
+    return info.free
+
+
+def kv_cache_size_bytes(
+    kv_size: int,  # KV 缓存的 cell 数
+    n_kv_head: int,  # KV 头数
+    head_dim_k: int,  # K 的每头维度
+    head_dim_v: int,  # V 的每头维度（很多模型与 K 相同）
+    dtype_bytes_k: int,  # K 的存储字节数
+    dtype_bytes_v: int,  # V 的存储字节数
+    n_layer: int,  # 层数
+) -> int:
+    size_k = kv_size * n_kv_head * head_dim_k * dtype_bytes_k * n_layer
+    size_v = kv_size * n_kv_head * head_dim_v * dtype_bytes_v * n_layer
+    return size_k + size_v
+
+
+def non_exps_size(reader: GGUFReader) -> int:
+    total_bytes = 0
+    exps_bytes = 0
+
+    for tensor in reader.tensors:
+        n_bytes = tensor.n_bytes
+        total_bytes += n_bytes
+
+        if "exps" in tensor.name.lower():
+            exps_bytes += n_bytes
+
+    other_bytes = total_bytes - exps_bytes
+    return other_bytes
+
+
+def layers_exps_bytes(reader: GGUFReader) -> dict[int, int]:
+    """统计每一层的 experts 权重总字节数。"""
+    by_layer = defaultdict(int)
+    for t in reader.tensors:
+        name = t.name
+        if "exps" not in name.lower():
+            continue
+        m = LAYER_RE.search(name)
+        if not m:
+            continue
+        layer_idx = int(m.group(1))
+        by_layer[layer_idx] += t.n_bytes
+    return dict(by_layer)
+
+
+def plan_exps_offload(
+    model_path: str,
+    ctx_size: int,
+    *,
+    n_layer_hint: int | None = None,  # 若已知总层数可传，否则按有 exps 的层计算
+    threshold: float = 0.9,  # 预留比例，避免把显存用满
+) -> dict:
+    reader = GGUFReader(model_path)
+
+    # 可用显存：free * 阈值 - KV cache - 非 exps
+    free = int(free_memory() * threshold)
+    kv_cache = kv_cache_size_bytes(
+        kv_size=ctx_size,
+        n_kv_head=4,
+        head_dim_k=128,
+        head_dim_v=128,
+        dtype_bytes_k=2,
+        dtype_bytes_v=2,
+        n_layer=48,  # 若可从模型元信息读到，建议用真实值
     )
+    available = free - kv_cache - non_exps_size(reader)
+
+    per_layer = layers_exps_bytes(reader)
+    if not per_layer:
+        return 0
+
+    max_layer = max(per_layer) if n_layer_hint is None else (n_layer_hint - 1)
+
+    remain = available
+    N = 0  # 默认全装得下 => N=0
+    for L in range(max_layer, -1, -1):
+        need = per_layer.get(L, 0)
+        if remain - need >= 0:
+            remain -= need
+        else:
+            N = L + 1  # 前 N 层在 CPU：0..L
+            break
+
+    return max(N, 0)
+
+
+def get_override_rules(model: str, ctx_size: int) -> list[str]:
+    print("正在分析 gguf 文件...")
+
+    offload_layers = plan_exps_offload(model, ctx_size)
+
+    return ["--n-gpu-layers", str(9999)] + ["--n-cpu-moe", str(offload_layers)]
+
+
+def main():
+    ap = argparse.ArgumentParser(description="GGUF 文件分析脚本")
     ap.add_argument("gguf_path", help="GGUF 文件路径")
     args = ap.parse_args()
     read_gguf_file(args.gguf_path)

@@ -1,7 +1,5 @@
-import sys
 import os
 import subprocess
-import argparse
 import signal
 import threading
 import time
@@ -58,16 +56,13 @@ class LlamaServerWrapper:
             print(f"读取输出时出错: {e}")
 
     # 主运行逻辑
-    def run(self) -> int:
+    def run(self, argv: list[str]) -> int:
         script_dir = Path(__file__).parent.absolute()
         root_dir = script_dir.parent.parent
         server_path = root_dir / "llama.cpp/build/bin/llama-server"
         log_path = root_dir / "llama-server.log"
 
-        # 允许透传未知参数到 llama-server
-        argparse.ArgumentParser(description="llama.moe", add_help=False)
-
-        cmd = [str(server_path)] + sys.argv[1:]
+        cmd = [str(server_path)] + argv
 
         print(f"启动命令: {' '.join(cmd)}")
         print(f"日志文件: {log_path}")
