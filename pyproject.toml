@@ -3,15 +3,23 @@ name = "llama-moe"
 version = "0.1.0"
 description = "llama-moe Environmental Management"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.12"
 dependencies = []
 
 [dependency-groups]
 dev = [
+    "evalscope>=0.17.1",
     "gguf>=0.17.1",
     "matplotlib>=3.10.5",
     "numpy>=1.26.4",
-    "opencompass[api]>=0.4.2",
+    "openai>=1.99.9",
     "pandas>=1.5.3",
     "prettytable>=3.16.0",
 ]
+
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project.scripts]
+llama-moe = "llama_moe.cli:main"

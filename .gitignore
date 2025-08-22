@@ -21,4 +21,4 @@ expert_proportions.csv
 
 # used by tests/eval/*.py
 .cache/
-outputs/
+results/
