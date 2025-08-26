@@ -8,7 +8,7 @@ llama-moe --model $model \
     --seed 0 \
     --override-tensor exps=CPU \
     --n-gpu-layers 999 \
-    --ctx-size 16384 \
+    --ctx-size 32768 \
     --threads 8 \
     --metrics \
     --api-key sk-1234 \

@@ -810,12 +810,12 @@ dependencies = [
 [package.dev-dependencies]
 dev = [
     { name = "evalscope" },
-    { name = "gguf" },
     { name = "matplotlib" },
     { name = "numpy" },
     { name = "openai" },
     { name = "pandas" },
     { name = "prettytable" },
+    { name = "pydantic" },
 ]
 
 [package.metadata]
@@ -827,12 +827,12 @@ requires-dist = [
 [package.metadata.requires-dev]
 dev = [
     { name = "evalscope", specifier = ">=0.17.1" },
-    { name = "gguf", specifier = ">=0.17.1" },
     { name = "matplotlib", specifier = ">=3.10.5" },
     { name = "numpy", specifier = ">=1.26.4" },
     { name = "openai", specifier = ">=1.99.9" },
     { name = "pandas", specifier = ">=1.5.3" },
     { name = "prettytable", specifier = ">=3.16.0" },
+    { name = "pydantic", specifier = ">=2.11.7" },
 ]
 
 [[package]]

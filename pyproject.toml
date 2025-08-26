@@ -17,6 +17,7 @@ dev = [
     "openai>=1.99.9",
     "pandas>=1.5.3",
     "prettytable>=3.16.0",
+    "pydantic>=2.11.7",
 ]
 
 [build-system]
