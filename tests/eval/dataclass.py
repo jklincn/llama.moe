@@ -1,6 +1,7 @@
 from pydantic import BaseModel, field_validator, ValidationError
-from typing import List, Dict, Any, Optional, Union
+from typing import List, Dict, Any, Optional, Union, Tuple
 from pathlib import Path
+
 
 class Usage(BaseModel):
     completion_tokens: int
@@ -31,7 +32,7 @@ class Review(BaseModel):
     result: Union[int, float]
 
 
-class RawInputV1(BaseModel):
+class RawInputMMLU(BaseModel):
     input: str
     A: str
     B: str
@@ -40,13 +41,13 @@ class RawInputV1(BaseModel):
     target: str
 
 
-class RawInputV2(BaseModel):
-    id: int
-    problem: str
-    solution: str
+class RawInputGsm8k(BaseModel):
+    question: str
     answer: str
-    url: str
-    year: str
+
+
+RAW_INPUT_TYPES = (RawInputMMLU, RawInputGsm8k)
+RawInput = Union[*RAW_INPUT_TYPES]
 
 
 class Choice(BaseModel):
@@ -56,7 +57,6 @@ class Choice(BaseModel):
     review: Review
 
 
-# --- 主数据模型 (这里是修改的部分) ---
 class ReviewResult(BaseModel):
     id: str
     choices: List[Choice]
@@ -67,7 +67,7 @@ class ReviewResult(BaseModel):
     model_spec: ModelSpec
     answer_id: str
     subset_name: str
-    raw_input: Union[RawInputV1, RawInputV2]
+    raw_input: RawInput
     index: int
     reviewed: bool
     review_id: str
@@ -81,19 +81,19 @@ class ReviewResult(BaseModel):
     @field_validator("raw_input", mode="before")
     @classmethod
     def validate_raw_input(cls, v: Any):
-        # 'v' 是 Pydantic 尝试验证 'raw_input' 字段之前传入的原始值（即字典）
         if not isinstance(v, dict):
             raise ValueError("raw_input 必须是一个字典")
 
-        # 根据字典中的独特键来判断它属于哪个版本
-        if "input" in v and "target" in v:
-            # 你可以直接返回字典，Pydantic 之后会自动用 RawInputV1 来解析它
-            # 或者为了更清晰，直接在这里实例化并返回
-            return RawInputV1(**v)
-        elif "problem" in v and "id" in v:
-            return RawInputV2(**v)
+        for model_cls in RAW_INPUT_TYPES:
+            try:
+                return model_cls(**v)
+            except ValidationError:
+                continue
 
-        raise ValueError("未知的 raw_input 结构：无法匹配 RawInputV1 或 RawInputV2")
+        known_types = ", ".join([m.__name__ for m in RAW_INPUT_TYPES])
+        raise ValueError(
+            f"未知的 raw_input 结构: 无法匹配任何已知的类型 ({known_types})"
+        )
 
 
 def load_from_jsonl_pydantic(jsonl_path: str) -> List[ReviewResult]:
@@ -114,6 +114,7 @@ def load_from_jsonl_pydantic(jsonl_path: str) -> List[ReviewResult]:
                 print(f"警告：处理第 {line_num} 行时发生未知错误: {e}")
     return data_items
 
+
 def load_jsonl_files(directory_path: str) -> List[ReviewResult]:
     """
     搜索指定目录及其所有子目录下的 .jsonl 文件，将它们的内容合并到一个列表中。
@@ -123,19 +124,21 @@ def load_jsonl_files(directory_path: str) -> List[ReviewResult]:
     """
 
     target_directory = Path(directory_path)
-    
+
     # 检查目录是否存在
     if not target_directory.is_dir():
         print(f"错误：目录 '{directory_path}' 不存在或不是一个目录。")
         return []
 
-    jsonl_files = list(target_directory.rglob('*.jsonl'))
+    jsonl_files = list(target_directory.rglob("*.jsonl"))
 
     if not jsonl_files:
         print(f"提示：在目录 '{directory_path}' 及其子目录中未找到任何 .jsonl 文件。")
         return []
-    
-    print(f"在 '{directory_path}' 中找到 {len(jsonl_files)} 个 .jsonl 文件，开始合并...")
+
+    print(
+        f"在 '{directory_path}' 中找到 {len(jsonl_files)} 个 .jsonl 文件，开始合并..."
+    )
 
     all_data_items = []
     for file_path in jsonl_files:

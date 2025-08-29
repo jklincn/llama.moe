@@ -178,7 +178,7 @@ def plan_exps_offload(
 
 
 def get_override_rules(model: str, ctx_size: int) -> list[str]:
-    print("正在分析 gguf 文件...")
+    print("正在进行调优...")
 
     offload_layers = plan_exps_offload(model, ctx_size)
 

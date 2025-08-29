@@ -57,10 +57,9 @@ class LlamaServerWrapper:
 
     # 主运行逻辑
     def run(self, argv: list[str]) -> int:
-        script_dir = Path(__file__).parent.absolute()
-        root_dir = script_dir.parent.parent
-        server_path = root_dir / "llama.cpp/build/bin/llama-server"
-        log_path = root_dir / "llama-server.log"
+        cwd = Path.cwd()
+        server_path = cwd / "llama.cpp/build/bin/llama-server"
+        log_path = cwd / "llama-server.log"
 
         cmd = [str(server_path)] + argv
 

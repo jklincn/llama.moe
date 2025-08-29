@@ -7,12 +7,11 @@ model_name = "Qwen/Qwen3-30B-A3B"
 
 task_config = TaskConfig(
     model=model_name,
-    datasets=["mmlu", "mmlu_pro", "gsm8k"],
+    datasets=["mmlu", "gsm8k"],
     dataset_args={
         "mmlu": {
             "few_shot_num": 5,
         },
-        "mmlu_pro": {},
     },
     eval_type=EvalType.SERVICE,
     # limit=10,
