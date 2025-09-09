@@ -1,4 +1,4 @@
-from dataclass import load_jsonl_files, ReviewResult
+from utils.dataclass import load_jsonl_files, ReviewResult
 
 
 def perform_data_validation(data_list: list[ReviewResult]):

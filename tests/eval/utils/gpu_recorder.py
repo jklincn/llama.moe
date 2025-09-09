@@ -62,12 +62,10 @@ class GPURecorder:
             return {"avg_gpu_util_percent": 0.0, "avg_memory_percent": 0.0}
 
         total_gpu_util = sum(record["gpu_util_percent"] for record in self._records)
-        total_memory_util = sum(record["mem_used_percent"] for record in self._records)
         record_count = len(self._records)
 
         return {
             "avg_gpu_util_percent": round(total_gpu_util / record_count, 2),
-            "avg_memory_percent": round(total_memory_util / record_count, 2),
         }
 
     # ========== 内部实现 ==========
@@ -98,13 +96,6 @@ class GPURecorder:
     def _create_sample_record(self):
         """创建一条包含 GPU0 指标的记录"""
         utilization = nvml.nvmlDeviceGetUtilizationRates(self._gpu_handle)
-        memory_info = nvml.nvmlDeviceGetMemoryInfo(self._gpu_handle)
-
-        used_mb = memory_info.used / self._MB_FACTOR
-        total_mb = memory_info.total / self._MB_FACTOR
-        used_percent = (
-            (memory_info.used / memory_info.total) * 100 if memory_info.total else 0.0
-        )
 
         timestamp = time.time()
 
@@ -116,9 +107,6 @@ class GPURecorder:
             "interval_s": self.interval,
             "gpu_index": 0,
             "gpu_util_percent": int(getattr(utilization, "gpu", 0)),
-            "mem_used_MB": round(used_mb, 1),
-            "mem_total_MB": round(total_mb, 1),
-            "mem_used_percent": round(used_percent, 1),
         }
 
     def _run_loop(self):
@@ -152,7 +140,7 @@ class GPURecorder:
                 self._records.append(record)
 
     def _plot_gpu_metrics(self):
-        """绘制 GPU 指标图表并保存到本地"""
+        """绘制 GPU 利用率图表并保存到本地"""
         if not self._records:
             return
 
@@ -160,58 +148,42 @@ class GPURecorder:
         timestamps = [
             datetime.fromtimestamp(record["ts_ms"] / 1000) for record in self._records
         ]
-        memory_percent = [record["mem_used_percent"] for record in self._records]
         gpu_util_percent = [record["gpu_util_percent"] for record in self._records]
 
         # 创建图表
-        fig, ax1 = plt.subplots(figsize=(12, 6))
+        fig, ax = plt.subplots(figsize=(12, 6))
 
-        # 左轴 - 显存占用率（面积图）
-        color1 = "tab:blue"
-        ax1.set_xlabel("Time (H:M:S)")
-        ax1.set_ylabel("Memory Usage (%)", color=color1)
-        ax1.fill_between(
-            timestamps, memory_percent, alpha=0.3, color=color1, label="Memory Usage"
-        )
-        ax1.plot(timestamps, memory_percent, color=color1, linewidth=1.5)
-        ax1.tick_params(axis="y", labelcolor=color1)
-        ax1.set_ylim(0, 100)
-
-        # 右轴 - GPU利用率（折线图）
-        ax2 = ax1.twinx()
-        color2 = "tab:red"
-        ax2.set_ylabel("GPU Utilization (%)", color=color2)
-        ax2.plot(
+        ax.set_xlabel("Time (H:M:S)")
+        ax.set_ylabel("GPU Utilization (%)", color="tab:red")
+        ax.plot(
             timestamps,
             gpu_util_percent,
-            color=color2,
+            color="tab:red",
             linewidth=2,
             label="GPU Utilization",
         )
-        ax2.tick_params(axis="y", labelcolor=color2)
-        ax2.set_ylim(0, 100)
+        ax.tick_params(axis="y", labelcolor="tab:red")
+        ax.set_ylim(0, 100)
 
         # 设置时间轴格式
-        ax1.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M:%S"))
-        ax1.xaxis.set_major_locator(
+        ax.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M:%S"))
+        ax.xaxis.set_major_locator(
             mdates.SecondLocator(interval=max(1, len(timestamps) // 10))
         )
-        plt.setp(ax1.xaxis.get_majorticklabels(), rotation=45)
+        plt.setp(ax.xaxis.get_majorticklabels(), rotation=45)
 
         # 图例
-        lines1, labels1 = ax1.get_legend_handles_labels()
-        lines2, labels2 = ax2.get_legend_handles_labels()
-        ax1.legend(lines1 + lines2, labels1 + labels2, loc="upper left")
+        ax.legend(loc="upper left")
 
         # 标题和布局
-        plt.title("GPU Performance Metrics", fontsize=14, pad=20)
+        plt.title("GPU Utilization Metrics", fontsize=14, pad=20)
         plt.tight_layout()
         plt.grid(True, alpha=0.3)
 
         # 生成文件名并保存
         timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"gpu_monitor_{timestamp_str}.png"
+        filename = f"gpu_utilization_{timestamp_str}.png"
         plt.savefig(filename, dpi=300, bbox_inches="tight", facecolor="white")
         plt.close(fig)  # 关闭图表释放内存
 
-        print(f"GPU 监控图表已保存至: {filename}")
+        print(f"GPU 利用率图表已保存至: {filename}")

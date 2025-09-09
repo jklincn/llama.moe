@@ -1,6 +1,5 @@
 from evalscope.run import run_task
 from evalscope.config import TaskConfig, EvalType
-from gpu_recorder import GPURecorder
 
 output_dir = "results/Qwen3-30B-A3B-origin"
 model_name = "Qwen/Qwen3-30B-A3B"
@@ -28,4 +27,4 @@ task_config = TaskConfig(
 
 run_task(task_cfg=task_config)
 
-print(f"评估完成，使用 python tests/eval/analysis.py {output_dir} 统计结果。")
+print(f"评估完成，使用 python tests/eval/utils/analysis.py {output_dir} 统计结果。")
