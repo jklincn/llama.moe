@@ -137,18 +137,18 @@ def layers_exps_bytes(reader: GGUFReader) -> dict[int, int]:
     return dict(by_layer)
 
 
-def plan_exps_offload(
-    model_path: str,
+def compute_layer_offloading(
+    reader: GGUFReader,
     ctx_size: int,
     *,
     n_layer_hint: int | None = None,  # 若已知总层数可传，否则按有 exps 的层计算
     threshold: float = 0.9,  # 预留比例，避免把显存用满
 ) -> dict:
-    reader = GGUFReader(model_path)
+    # 可用显存：free * threshold - KV cache - non-exps
 
-    # 可用显存：free * 阈值 - KV cache - 非 exps
-    free = int(free_memory() * threshold)
-    kv_cache = kv_cache_size_bytes(
+    cur = int(free_memory() * threshold)
+
+    cur -= kv_cache_size_bytes(
         kv_size=ctx_size,
         n_kv_head=4,
         head_dim_k=128,
@@ -157,7 +157,8 @@ def plan_exps_offload(
         dtype_bytes_v=2,
         n_layer=48,  # 可从模型元信息读到，建议用真实值
     )
-    available = free - kv_cache - non_exps_size(reader)
+
+    cur -= non_exps_size(reader)
 
     per_layer = layers_exps_bytes(reader)
     if not per_layer:
@@ -165,12 +166,11 @@ def plan_exps_offload(
 
     max_layer = max(per_layer) if n_layer_hint is None else (n_layer_hint - 1)
 
-    remain = available
     N = 0  # 默认全装得下 => N=0
     for L in range(max_layer, -1, -1):
         need = per_layer.get(L, 0)
-        if remain - need >= 0:
-            remain -= need
+        if cur - need >= 0:
+            cur -= need
         else:
             N = L + 1  # 前 N 层在 CPU：0..L
             break
@@ -178,8 +178,8 @@ def plan_exps_offload(
     return max(N, 0)
 
 
-def get_override_rules(model: str, ctx_size: int) -> list[str]:
-    offload_layers = plan_exps_offload(model, ctx_size)
+def get_override_rules(reader: GGUFReader, ctx_size: int) -> list[str]:
+    offload_layers = compute_layer_offloading(reader, ctx_size)
 
     return ["--n-gpu-layers", str(999)] + ["--n-cpu-moe", str(offload_layers)]
 

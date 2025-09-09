@@ -1,8 +1,7 @@
 import argparse
-import os
 import sys
 from pathlib import Path
-
+from gguf import GGUFReader
 import uvicorn
 
 from .override import get_override_rules
@@ -30,7 +29,8 @@ def main():
     ctx_size = args.ctx_size
 
     print("[main] 正在寻找最优配置...")
-    override_rules = get_override_rules(model, ctx_size)
+    reader = GGUFReader(model)
+    override_rules = get_override_rules(reader, ctx_size)
 
     final = ["--model", model] + ["--ctx-size", str(ctx_size)] + override_rules + other
 

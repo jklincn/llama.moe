@@ -132,7 +132,7 @@ class LlamaServerWrapper:
         # 等待退出
         try:
             rc = self.process.wait(timeout=10)
-            print(f"[wrapper] stop: llama-server 已退出，返回码 {rc}")
+            print(f"[wrapper] llama-server 已退出，返回码 {rc}")
         except TimeoutError:
             print("[wrapper] stop: 等待子进程退出超时")
         finally:
