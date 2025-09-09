@@ -1,9 +1,13 @@
 import argparse
-from pathlib import Path
+import os
 import sys
+from pathlib import Path
 
-from .wrapper import LlamaServerWrapper
+import uvicorn
+
 from .override import get_override_rules
+from .proxy import app
+from .wrapper import LlamaServerWrapper
 
 
 def main():
@@ -19,16 +23,36 @@ def main():
     parser.add_argument("--n-cpu-moe", "-ncmoe", dest="n-cpu-moe", type=str, default=None)
     parser.add_argument("--cache-type-k", "-ctk", dest="cache-type-k", type=str, default=None)
     parser.add_argument("--cache-type-v", "-ctv", dest="cache-type-v", type=str, default=None)
-
     # fmt: on
 
     args, other = parser.parse_known_args()
     model = args.model
     ctx_size = args.ctx_size
-    final = ["--model", model] + ["--ctx-size", str(ctx_size)] + get_override_rules(model, ctx_size) + other
+
+    print("[main] 正在寻找最优配置...")
+    override_rules = get_override_rules(model, ctx_size)
+
+    final = ["--model", model] + ["--ctx-size", str(ctx_size)] + override_rules + other
 
     wrapper = LlamaServerWrapper()
-    return wrapper.run(final)
+    print("[main] 正在启动 llama-server...")
+    pid = wrapper.run(final)
+    if pid < 0:
+        print("[main] llama-server 启动失败")
+        return 1
+
+    try:
+        uvicorn.run(app, log_level="info")
+    except KeyboardInterrupt:
+        print("[main] 捕获到 Ctrl+C, 正在停止子进程...")
+    finally:
+        # 确保进程被停止并等待退出
+        try:
+            wrapper.stop()
+        except Exception as e:
+            print(f"[main] 停止子进程时出错: {e}")
+
+    return 0
 
 
 if __name__ == "__main__":

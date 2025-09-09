@@ -36,7 +36,7 @@
             "program": "${workspaceFolder}/llama.cpp/build/bin/llama-server",
             "args": [
                 "--model",
-                "/mnt/data/gguf/DeepSeek-R1-Q4_K_M.gguf",
+                "/mnt/data/gguf/Qwen3-30B-A3B-Q8_0.gguf",
                 "--port",
                 "8088",
                 "--seed",

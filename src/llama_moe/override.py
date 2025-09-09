@@ -92,6 +92,7 @@ def free_memory() -> int:
     return info.free
 
 
+# todo：从 gguf 中读取
 def kv_cache_size_bytes(
     kv_size: int,  # KV 缓存的 cell 数
     n_kv_head: int,  # KV 头数
@@ -154,7 +155,7 @@ def plan_exps_offload(
         head_dim_v=128,
         dtype_bytes_k=2,
         dtype_bytes_v=2,
-        n_layer=48,  # 若可从模型元信息读到，建议用真实值
+        n_layer=48,  # 可从模型元信息读到，建议用真实值
     )
     available = free - kv_cache - non_exps_size(reader)
 
@@ -178,11 +179,9 @@ def plan_exps_offload(
 
 
 def get_override_rules(model: str, ctx_size: int) -> list[str]:
-    print("正在进行调优...")
-
     offload_layers = plan_exps_offload(model, ctx_size)
 
-    return ["--n-gpu-layers", str(9999)] + ["--n-cpu-moe", str(offload_layers)]
+    return ["--n-gpu-layers", str(999)] + ["--n-cpu-moe", str(offload_layers)]
 
 
 def main():
