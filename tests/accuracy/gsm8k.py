@@ -14,9 +14,9 @@ task_config = TaskConfig(
     generation_config={
         "max_tokens": 32768,
         "temperature": 0.0,
+        "stream": True,
     },
     use_cache=output_dir,
-    stream=True,
 )
 
 run_task(task_cfg=task_config)

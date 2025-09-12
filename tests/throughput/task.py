@@ -9,14 +9,13 @@ def run_eval():
         datasets=["gsm8k"],
         eval_type=EvalType.SERVICE,
         eval_batch_size=1,
-        limit=1,
         api_url="http://127.0.0.1:8080/v1/chat/completions",
         api_key="sk-1234",
         generation_config={
             "max_tokens": 32768,
             "temperature": 0.0,
+            "stream": True,
         },
-        stream=True,
     )
 
     run_task(task_cfg=task_config)
