@@ -1,7 +1,7 @@
 from evalscope.run import run_task
 from evalscope.config import TaskConfig, EvalType
 
-output_dir = "results/Qwen3-30B-A3B-origin"
+output_dir = "outputs/Qwen3-30B-A3B-origin"
 model_name = "Qwen/Qwen3-30B-A3B"
 
 task_config = TaskConfig(

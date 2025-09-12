@@ -1,7 +1,7 @@
 from evalscope.run import run_task
 from evalscope.config import TaskConfig, EvalType
 
-output_dir = "results/cmmlu-subset"
+output_dir = "outputs/cmmlu-subset"
 model_name = "Qwen/Qwen3-30B-A3B"
 
 task_config = TaskConfig(

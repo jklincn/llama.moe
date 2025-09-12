@@ -30,7 +30,7 @@ Usage is the same as [llama-server](https://github.com/ggml-org/llama.cpp/tree/m
 
 Simply replace `llama-server` with `llama-moe`.
 
-Example: [tests/llama-server/run_server.sh](tests/llama-server/run_server.sh)
+Example: [tests/run_server.sh](tests/run_server.sh)
 
 ## Development Setup
 

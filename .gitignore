@@ -12,13 +12,17 @@ wheels/
 # log
 *.log
 
-# used by llama.cpp/ggml/src/ggml-moe.cpp
+# created by llama.cpp/ggml/src/ggml-moe.cpp
 expert_activations.csv
 
-# used by scripts/expert_activation_analysis.py
+# created by scripts/expert_activation_analysis.py
 expert_activation_heatmap.png
 expert_proportions.csv
 
-# used by tests/eval/*.py
+# created by tests/eval/*.py
 .cache/
 results/
+outputs/
+
+# created by tests/throughput/run.py
+output.txt

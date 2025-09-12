@@ -1,11 +1,10 @@
 import argparse
 import sys
 from pathlib import Path
+import time
 from gguf import GGUFReader
-import uvicorn
 
 from .override import get_override_rules
-from .proxy import app
 from .wrapper import LlamaServerWrapper
 
 
@@ -42,7 +41,8 @@ def main():
         return 1
 
     try:
-        uvicorn.run(app, log_level="info")
+        while True:
+            time.sleep(10)
     except KeyboardInterrupt:
         print("[main] 捕获到 Ctrl+C, 正在停止子进程...")
     finally:
