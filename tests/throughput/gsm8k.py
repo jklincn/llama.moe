@@ -1,7 +1,7 @@
 from evalscope.run import run_task
 from evalscope.config import TaskConfig, EvalType
 
-output_dir = "results/gsm8k-2"
+output_dir = "results/gsm8k"
 model_name = "Qwen/Qwen3-30B-A3B"
 
 task_config = TaskConfig(
@@ -9,7 +9,8 @@ task_config = TaskConfig(
     datasets=["gsm8k"],
     eval_type=EvalType.SERVICE,
     eval_batch_size=1,
-    api_url="http://127.0.0.1:8088/v1/chat/completions",
+    limit=20,
+    api_url="http://127.0.0.1:8080/v1/chat/completions",
     api_key="sk-1234",
     generation_config={
         "max_tokens": 32768,
