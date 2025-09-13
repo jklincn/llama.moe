@@ -41,6 +41,9 @@ def main():
         return 1
 
     try:
+        print(
+            "[main] url: http://127.0.0.1:8080/v1/chat/completions, key: 'sk-1234'"
+        )
         while True:
             time.sleep(10)
     except KeyboardInterrupt:

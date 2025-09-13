@@ -25,4 +25,4 @@ results/
 outputs/
 
 # created by tests/throughput/run.py
-output.txt
+tests/throughput/results*

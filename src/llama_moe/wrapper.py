@@ -37,7 +37,7 @@ class LlamaServerWrapper:
             except Exception:
                 pass
 
-    def run(self, argv: list[str]) -> int:
+    def run(self, argv: list[str], timeout: int = 60) -> int:
         if self.process and self.process.poll() is None:
             raise RuntimeError("llama-server 已在运行，请先 stop().")
 
@@ -78,9 +78,8 @@ class LlamaServerWrapper:
         )
         self.output_thread.start()
 
-        # 等待启动成功标志，超时时间60秒
+        # 等待启动成功标志
         success = False
-        timeout = 60
         start_time = time.time()
         while time.time() - start_time < timeout:
             try:
@@ -132,9 +131,10 @@ class LlamaServerWrapper:
         # 等待退出
         try:
             rc = self.process.wait(timeout=10)
-            print(f"[wrapper] llama-server 已退出，返回码 {rc}")
+            if rc != 0:
+                print(f"[wrapper] llama-server 退出异常, 子返回码 {rc}")
         except TimeoutError:
-            print("[wrapper] stop: 等待子进程退出超时")
+            print("[wrapper] llama-server 退出超时")
         finally:
             if self.output_thread and self.output_thread.is_alive():
                 self.output_thread.join(timeout=5)

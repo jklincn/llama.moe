@@ -804,6 +804,7 @@ dependencies = [
 dev = [
     { name = "evalscope" },
     { name = "matplotlib" },
+    { name = "modelscope" },
     { name = "numpy" },
     { name = "openai" },
     { name = "pandas" },
@@ -821,6 +822,7 @@ requires-dist = [
 dev = [
     { name = "evalscope", specifier = ">=0.17.1" },
     { name = "matplotlib", specifier = ">=3.10.5" },
+    { name = "modelscope", specifier = ">=1.29.2" },
     { name = "numpy", specifier = ">=1.26.4" },
     { name = "openai", specifier = ">=1.99.9" },
     { name = "pandas", specifier = ">=1.5.3" },
