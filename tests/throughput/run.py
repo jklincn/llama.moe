@@ -1,4 +1,5 @@
 import sys
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -11,37 +12,31 @@ from log_analysis import log_analysis
 from llama_moe import LlamaServerWrapper, get_override_rules
 
 
-def run_eval(model: str, model_dir: Path, max_tokens):
-    """
-    运行模型评估
-    """
-
-    # 切换到模型版本目录
-    work_dir = model_dir / "evalscope"
+def run_eval(model: str, model_dir: Path, ctx_size: int):
     task_config = TaskConfig(
         model=model,
-        datasets=["gsm8k"],
+        datasets=["mmlu"],
         eval_type=EvalType.SERVICE,
         eval_batch_size=1,
         api_url="http://127.0.0.1:8080/v1/chat/completions",
         api_key="sk-1234",
         generation_config={
-            "max_tokens": max_tokens,
+            "max_tokens": ctx_size,
             "temperature": 0.0,
             "stream": True,
         },
-        limit=1,
-        work_dir=str(work_dir),
+        limit=10,
+        work_dir=model_dir / "evalscope",
     )
 
-    start_time = datetime.now()
-    print(f"[{start_time.strftime('%Y-%m-%d %H:%M:%S')}] 开始启动评估")
+    start_time = time.time()
+    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] 开始启动评估")
 
     run_task(task_cfg=task_config)
 
-    end_time = datetime.now()
+    end_time = time.time()
     print(
-        f"[{end_time.strftime('%Y-%m-%d %H:%M:%S')}] 结束评估, 用时 {end_time - start_time} 秒"
+        f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] 结束评估, 用时 {end_time - start_time} 秒"
     )
 
 
@@ -55,25 +50,18 @@ log_file = work_dir / "run.log"
 f = open(log_file, "w", encoding="utf-8")
 sys.stdout = f
 
-# fmt: off
-common_args = [
-    "--seed", "0",
-    "--threads", "8",
-    "--metrics",
-    "--api-key", "sk-1234",
-    "--slots",
-    "--log-verbosity", "0",
-    "--cont-batching",
-    "--parallel", "1",
-    "--threads-http", "4"
-]
-# fmt: on
+common_args = ["--seed", "0", "--api-key", "sk-1234", "--log-verbosity", "0"]
 
 model_list = {
-    "Qwen3/Qwen3-30B-A3B-Q8_0": {
+    "Qwen3-30B-A3B-Q8_0": {
         "path": "/mnt/gguf/Qwen3-30B-A3B-Q8_0.gguf",
-        "ctx_size": 32768,
-        "base": ["--n-gpu-layers", "30"],
+        "ctx_size": 16384,
+        "base": ["--n-gpu-layers", "33"],
+    },
+    "GLM-4.5-Q8_0": {
+        "path": "/mnt/gguf/GLM-4.5-Q8_0/GLM-4.5-Q8_0-00001-of-00008.gguf",
+        "ctx_size": 16384,
+        "base": ["--n-gpu-layers", "6"],
     }
 }
 
@@ -84,7 +72,6 @@ for name, model in model_list.items():
     ctx_size = model["ctx_size"]
 
     for version in versions:
-        # 创建模型版本专用目录
         model_dir = work_dir / name.replace("/", "_") / version
         model_dir.mkdir(parents=True, exist_ok=True)
 
@@ -112,7 +99,7 @@ for name, model in model_list.items():
             # 开始GPU监控
             gpu_recorder.start()
             memory_used, memory_percent = gpu_recorder.get_memory_usage()
-            print(f"显存使用: {memory_used:.2f} MB ({memory_percent:.2f}%)")
+            print(f"显存使用: {memory_used:.2f} MiB ({memory_percent:.2f}%)")
 
             # 运行评估，传入模型目录，在函数内部切换工作目录
             run_eval(name, model_dir, ctx_size)

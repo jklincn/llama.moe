@@ -41,7 +41,7 @@ def read_gguf_file(gguf_file_path: str):
 
     # ---------- 打印 Tensors ----------
     print("Tensors:")
-    header = "{:<30} | {:<12} | {:>12} | {:>10} | {}"
+    header = "{:<40} | {:<15} | {:>12} | {:>10} | {}"
     print(header.format("Tensor Name", "Shape", "Elements", "Size", "Quant"))
     print("-" * 80)
 
@@ -182,7 +182,6 @@ def get_override_rules(reader: GGUFReader, ctx_size: int) -> list[str]:
     offload_layers = compute_layer_offloading(reader, ctx_size)
 
     return ["--n-gpu-layers", str(999)] + ["--n-cpu-moe", str(offload_layers)]
-
 
 def main():
     ap = argparse.ArgumentParser(description="GGUF 文件分析脚本")

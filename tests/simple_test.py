@@ -1,10 +1,9 @@
 import openai
 
 try:
-    client = openai.OpenAI(base_url="http://localhost:8000", api_key="sk-1234")
+    client = openai.OpenAI(base_url="http://localhost:8080", api_key="sk-1234")
 
     messages = [
-        {"role": "system", "content": "你是一个乐于助人的AI助手。"},
         {"role": "user", "content": "你好！请你用中文介绍一下自己。"},
     ]
 

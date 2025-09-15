@@ -259,10 +259,9 @@ if __name__ == "__main__":
     # 测试显存使用情况
     try:
         memory_used, memory_percent = get_memory_usage()
-        print(f"当前显存使用: {memory_used:.2f} MB ({memory_percent:.2f}%)")
+        print(f"当前显存使用: {memory_used:.2f} MiB ({memory_percent:.2f}%)")
     except Exception as e:
         print(f"获取显存信息失败: {e}")
-
     # 模拟GPU工作
     print("模拟5秒GPU工作...")
     time.sleep(5)
