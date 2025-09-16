@@ -61,5 +61,5 @@ fi
 cmake "${cmake_args[@]}"
 cmake --build "${build_dir}"
 
-echo -e "\n✔  Build finished: ${build_type}"
+echo -e "✔  Build finished: ${build_type}"
 popd >/dev/null

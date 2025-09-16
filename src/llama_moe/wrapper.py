@@ -1,18 +1,24 @@
+import logging
 import os
+import signal
 import subprocess
 import threading
 import time
-import signal
 from pathlib import Path
 from typing import Optional
 
-import logging
-
-# 获取wrapper模块的日志器
 logger = logging.getLogger("wrapper")
 
+
 class LlamaServerWrapper:
-    def __init__(self, log_filename: str = "llama-server.log"):
+    def __init__(
+        self,
+        bin_path: str = "llama.cpp/build/bin/llama-server",
+        log_filename: str = "llama-server.log",
+    ):
+        if not Path(bin_path).is_file():
+            raise FileNotFoundError("找不到 llama-server 可执行文件, 请先进行编译")
+        self.bin_path = bin_path
         self.process: Optional[subprocess.Popen] = None
         self.output_thread: Optional[threading.Thread] = None
         self._log_file: Optional[object] = None
@@ -45,8 +51,7 @@ class LlamaServerWrapper:
         if self.process and self.process.poll() is None:
             raise RuntimeError("llama-server 已在运行，请先 stop().")
 
-        default_path = Path.cwd() / "llama.cpp" / "build" / "bin" / "llama-server"
-        cmd = [str(default_path)] + argv
+        cmd = [self.bin_path] + argv
 
         logger.debug(f"启动命令: {' '.join(cmd)}")
         logger.debug(f"日志文件: {self.log_path}")
@@ -57,7 +62,9 @@ class LlamaServerWrapper:
         popen_kwargs = dict(
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
-            universal_newlines=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
             bufsize=1,
             start_new_session=True,
         )
@@ -93,7 +100,7 @@ class LlamaServerWrapper:
                     break
 
                 # 检查日志文件是否包含启动成功标志
-                with open(self.log_path, "r", encoding="utf-8") as log:
+                with open(self.log_path, "r", encoding="utf-8", errors="ignore") as log:
                     for line in log:
                         if "server is listening on" in line:
                             success = True
@@ -133,7 +140,7 @@ class LlamaServerWrapper:
 
         # 等待退出
         try:
-            rc = self.process.wait(timeout=10)
+            rc = self.process.wait(timeout=60)
             if rc != 0:
                 logger.warning(f"llama-server 退出异常, 子返回码 {rc}")
         except TimeoutError:

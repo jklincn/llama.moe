@@ -4,6 +4,9 @@ from pathlib import Path
 
 import numpy as np
 import pynvml as nvml
+import logging
+
+logger = logging.getLogger("gpu_recorder")
 
 # 全局状态变量
 _records = []
@@ -27,7 +30,7 @@ def start(interval: float = 0.1) -> None:
     global _thread, _stop_event, _records, _start_time, _started_recording
 
     if _thread is not None:
-        print("GPU监控已在运行中")
+        logger.warning("GPU监控已在运行中")
         return
 
     # 初始化
@@ -42,7 +45,6 @@ def start(interval: float = 0.1) -> None:
         target=_monitor_loop, args=(interval,), name="GPURecorder", daemon=True
     )
     _thread.start()
-    print(f"GPU监控已启动，采样间隔: {interval}s")
 
 
 def finish(filepath: str) -> float:
@@ -57,7 +59,7 @@ def finish(filepath: str) -> float:
     global _thread, _stop_event, _records
 
     if _thread is None:
-        print("GPU监控未启动")
+        logger.warning("GPU监控未启动")
         return 0.0
 
     # 停止监控线程
@@ -68,7 +70,7 @@ def finish(filepath: str) -> float:
     _shutdown_nvml()
 
     if not _records:
-        print("未记录到任何数据")
+        logger.warning("未记录到任何数据")
         return 0.0
 
     # 确保目录存在
@@ -86,8 +88,8 @@ def finish(filepath: str) -> float:
     max_util = np.max(data_array[:, 1])
     min_util = np.min(data_array[:, 1])
 
-    print(f"GPU监控已停止，数据已保存到: {filepath}")
-    print(
+    logger.info(f"GPU监控已停止，数据已保存到: {filepath}")
+    logger.info(
         f"监控统计 - 平均: {avg_util:.2f}%, 最高: {max_util:.2f}%, 最低: {min_util:.2f}%"
     )
 
@@ -247,7 +249,7 @@ def _monitor_loop(interval: float) -> None:
             _records.append([relative_time, gpu_util])
 
         except Exception as e:
-            print(f"监控循环出错: {e}")
+            logger.error(f"监控循环出错: {e}")
             break
 
 

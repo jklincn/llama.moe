@@ -1,4 +1,6 @@
-import sys
+import logging
+import logging.config
+import os
 import time
 from datetime import datetime
 from pathlib import Path
@@ -8,14 +10,86 @@ from evalscope.config import EvalType, TaskConfig
 from evalscope.run import run_task
 from gguf import GGUFReader
 from log_analysis import log_analysis
+from report import analysis
 
 from llama_moe import LlamaServerWrapper, get_override_rules
 
+ctx_size = 4096
+model_list = {
+    "Qwen3-30B-A3B-Q8_0": {
+        "path": "/mnt/data/gguf/Qwen3-30B-A3B-Q8_0.gguf",
+        "base": ["--n-gpu-layers", "35"],
+    },
+    "GLM-4.5-Air-Q8_0": {
+        "path": "/mnt/data/gguf/GLM-4.5-Air-Q8_0.gguf",
+        "base": ["--n-gpu-layers", "10"],
+    },
+    "Qwen3-235B-A22B-Q8_0": {
+        "path": "/mnt/data/gguf/Qwen3-235B-A22B-Q8_0.gguf",
+        "base": ["--n-gpu-layers", "8"],
+    },
+    "GLM-4.5-Q8_0": {
+        "path": "/mnt/data/gguf/GLM-4.5-Q8_0.gguf",
+        "base": ["--n-gpu-layers", "6"],
+    },
+    # KV Cache 太大了
+    "DeepSeek-R1-Q4_K_M": {
+        "path": "/mnt/data/gguf/DeepSeek-R1-Q4_K_M.gguf",
+        "base": ["--n-gpu-layers", "2"],
+    },
+}
+versions_list = ["base", "all_exps_on_cpu", "llama_moe"]
 
-def run_eval(model: str, model_dir: Path, ctx_size: int):
+test_models = [
+    "Qwen3-30B-A3B-Q8_0",
+    "GLM-4.5-Air-Q8_0",
+    "Qwen3-235B-A22B-Q8_0",
+    "GLM-4.5-Q8_0",
+    # "DeepSeek-R1-Q4_K_M",
+]
+test_versions = ["base", "all_exps_on_cpu", "llama_moe"]
+
+
+def setup_logging(log_file: Path, level=logging.INFO):
+    LOGGING_CONFIG = {
+        "version": 1,
+        "disable_existing_loggers": False,
+        "formatters": {
+            "default": {
+                "format": "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+                "datefmt": "%Y-%m-%d %H:%M:%S",
+            },
+        },
+        "handlers": {
+            "file": {
+                "class": "logging.FileHandler",
+                "formatter": "default",
+                "level": level,
+                "filename": str(log_file),
+                "mode": "w",
+                "encoding": "utf-8",
+            },
+        },
+        "root": {
+            "level": level,
+            "handlers": ["file"],
+        },
+    }
+    logging.config.dictConfig(LOGGING_CONFIG)
+    for noisy in [
+        "openai",
+        "httpcore",
+    ]:
+        logging.getLogger(noisy).setLevel(logging.WARNING)
+
+
+def run_eval(model: str, model_dir: Path, ctx_size: int, logger: logging.Logger):
     task_config = TaskConfig(
         model=model,
-        datasets=["mmlu"],
+        # datasets
+        # - gsm8k
+        # - mmlu
+        datasets=["gsm8k"],
         eval_type=EvalType.SERVICE,
         eval_batch_size=1,
         api_url="http://127.0.0.1:8080/v1/chat/completions",
@@ -25,96 +99,99 @@ def run_eval(model: str, model_dir: Path, ctx_size: int):
             "temperature": 0.0,
             "stream": True,
         },
-        limit=10,
+        limit=3,
         work_dir=model_dir / "evalscope",
     )
 
     start_time = time.time()
-    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] 开始启动评估")
+    logger.info("开始启动评估")
 
     run_task(task_cfg=task_config)
 
     end_time = time.time()
-    print(
-        f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] 结束评估, 用时 {end_time - start_time} 秒"
-    )
+    logger.info("结束评估, 用时 %.2f 秒", end_time - start_time)
 
 
-base_dir = Path(__file__).resolve().parent
-run_timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-work_dir = base_dir / f"results-{run_timestamp}"
-work_dir.mkdir(exist_ok=True)
+def main():
+    base_dir = Path(__file__).resolve().parent
+    bin_path = base_dir.parent.parent / "llama.cpp" / "build" / "bin" / "llama-server"
+    run_timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    work_dir = base_dir / f"results-{run_timestamp}"
+    work_dir.mkdir(exist_ok=True)
 
-# 创建主日志文件
-log_file = work_dir / "run.log"
-f = open(log_file, "w", encoding="utf-8")
-sys.stdout = f
+    # 创建主日志文件并初始化全局日志
+    log_file = work_dir / "run.log"
+    if os.getenv("LLAMA_MOE_DEBUG") == "1":
+        setup_logging(log_file=log_file, level=logging.DEBUG)
+    else:
+        setup_logging(log_file=log_file, level=logging.INFO)
+    logger = logging.getLogger("run_test")
+    logger.info("日志初始化完成，日志文件：%s", log_file)
 
-common_args = ["--seed", "0", "--api-key", "sk-1234", "--log-verbosity", "0"]
+    # fmt: off
+    common_args = [
+        "--seed", "0",
+        "--api-key", "sk-1234",
+        "--log-verbosity", "0",
+        "--ctx-size", str(ctx_size),
+    ]
+    # fmt: on
 
-model_list = {
-    "Qwen3-30B-A3B-Q8_0": {
-        "path": "/mnt/gguf/Qwen3-30B-A3B-Q8_0.gguf",
-        "ctx_size": 16384,
-        "base": ["--n-gpu-layers", "33"],
-    },
-    "GLM-4.5-Q8_0": {
-        "path": "/mnt/gguf/GLM-4.5-Q8_0/GLM-4.5-Q8_0-00001-of-00008.gguf",
-        "ctx_size": 16384,
-        "base": ["--n-gpu-layers", "6"],
-    }
-}
-
-versions = ["base", "all_exps_on_cpu", "llama_moe"]
-
-for name, model in model_list.items():
-    path = model["path"]
-    ctx_size = model["ctx_size"]
-
-    for version in versions:
-        model_dir = work_dir / name.replace("/", "_") / version
-        model_dir.mkdir(parents=True, exist_ok=True)
-
-        final_arg = common_args + ["--model", path, "--ctx-size", str(ctx_size)]
-
-        match version:
-            case "base":
-                final_arg += model["base"]
-            case "all_exps_on_cpu":
-                final_arg += ["--n-gpu-layers", "999", "--cpu-moe"]
-            case "llama_moe":
-                final_arg += get_override_rules(GGUFReader(path), ctx_size)
-
-        print(
-            f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] 正在启动 {name} 的 {version} 版本..."
-        )
-
-        wrapper = LlamaServerWrapper(model_dir / "llama-server.log")
-        try:
-            pid = wrapper.run(final_arg)
-            if pid < 0:
-                print(f"启动 {name}-{version} 失败")
+    for name, model in model_list.items():
+        if name not in test_models:
+            continue
+        for version in versions_list:
+            if version not in test_versions:
                 continue
 
-            # 开始GPU监控
-            gpu_recorder.start()
-            memory_used, memory_percent = gpu_recorder.get_memory_usage()
-            print(f"显存使用: {memory_used:.2f} MiB ({memory_percent:.2f}%)")
+            model_dir = work_dir / name.replace("/", "_") / version
+            model_dir.mkdir(parents=True, exist_ok=True)
+            path = model["path"]
+            final_arg = common_args + ["--model", path]
 
-            # 运行评估，传入模型目录，在函数内部切换工作目录
-            run_eval(name, model_dir, ctx_size)
+            match version:
+                case "base":
+                    final_arg += model["base"]
+                case "all_exps_on_cpu":
+                    final_arg += ["--n-gpu-layers", "999", "--cpu-moe"]
+                case "llama_moe":
+                    final_arg += get_override_rules(GGUFReader(path), ctx_size)
 
-            # 结束GPU监控并保存数据
-            gpu_recorder.finish(str(model_dir / "gpu_utilization.npz"))
+            logger.info("正在启动 %s (%s) ...", name, version)
 
-            # 分析服务器日志
-            log_analysis(str(model_dir / "llama-server.log"))
+            wrapper = LlamaServerWrapper(
+                str(bin_path), str(model_dir / "llama-server.log")
+            )
+            try:
+                pid = wrapper.run(final_arg, timeout=3600)
+                if pid < 0:
+                    logger.error("启动 %s (%s) 失败", name, version)
+                    exit(1)
 
-        except Exception as e:
-            print(f"运行 {name}-{version} 时出错: {e}")
-        finally:
-            wrapper.stop()
+                # 开始GPU监控
+                gpu_recorder.start()
+                memory_used, memory_percent = gpu_recorder.get_memory_usage()
+                logger.info("显存使用: %.2f MiB (%.2f%%)", memory_used, memory_percent)
 
-print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] 所有评估完成")
+                # 运行评估
+                run_eval(name, model_dir, ctx_size, logger)
 
-f.close()
+                # 结束GPU监控并保存数据
+                gpu_recorder.finish(str(model_dir / "gpu_utilization.npz"))
+
+                # 分析日志获得结果
+                log_analysis(str(model_dir / "llama-server.log"))
+
+            except Exception as e:
+                logger.exception("运行 %s (%s) 时出错: %s", name, version, e)
+            finally:
+                wrapper.stop()
+
+    logger.info("所有评估完成")
+
+    # 生成报告/分析
+    analysis(work_dir)
+
+
+if __name__ == "__main__":
+    main()

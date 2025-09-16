@@ -2,6 +2,9 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
+import logging
+
+logger = logging.getLogger("log_analysis")
 
 
 @dataclass
@@ -112,11 +115,11 @@ def log_analysis(log_path: str) -> Optional[PerformanceStats]:
                             stats.n_requests += 1
                             have_prompt_for_current = False
                     except ValueError as e:
-                        print(f"警告: 第{line_num}行数据解析错误 - {e}")
+                        logger.warning(f"警告: 第{line_num}行数据解析错误 - {e}")
                     continue
 
     except Exception as e:
-        print(f"错误: 读取日志文件失败 - {e}")
+        logger.error(f"错误: 读取日志文件失败 - {e}")
         return None
 
     # 打印统计结果
@@ -131,33 +134,35 @@ def _print_stats(stats: PerformanceStats) -> None:
     Args:
         stats: 性能统计对象
     """
-    print("===================== 性能统计 =====================")
+    logging.info("===================== 性能统计 =====================")
     if stats.n_requests == 0:
-        print("未提取到任何完整的请求数据")
+        logging.warning("未提取到任何完整的请求数据")
         return
 
-    print(f"总请求数:        {stats.n_requests}")
-    print(f"总输入tokens:    {stats.prompt_tokens_total}")
-    print(f"总生成tokens:    {stats.eval_tokens_total}")
+    logging.info(f"总请求数:        {stats.n_requests}")
+    logging.info(f"总输入tokens:    {stats.prompt_tokens_total}")
+    logging.info(f"总生成tokens:    {stats.eval_tokens_total}")
 
-    print("--- 吞吐率统计 ---")
-    print(f"输入处理吞吐率:  {stats.prompt_throughput:.2f} tokens/s")
-    print(f"生成吞吐率:      {stats.eval_throughput:.2f} tokens/s")
+    logging.info("--- 吞吐率统计 ---")
+    logging.info(f"输入处理吞吐率:  {stats.prompt_throughput:.2f} tokens/s")
+    logging.info(f"生成吞吐率:      {stats.eval_throughput:.2f} tokens/s")
 
-    print("--- 时间统计 ---")
-    print(f"总输入处理时间:  {stats.prompt_time_total / 1000:.2f} s")
-    print(f"总生成时间:      {stats.eval_time_total / 1000:.2f} s")
+    logging.info("--- 时间统计 ---")
+    logging.info(f"总输入处理时间:  {stats.prompt_time_total / 1000:.2f} s")
+    logging.info(f"总生成时间:      {stats.eval_time_total / 1000:.2f} s")
 
-    print("--- 平均每请求统计 ---")
-    print(f"平均输入长度:    {stats.avg_prompt_tokens_per_request:.2f} tokens/req")
-    print(f"平均生成长度:    {stats.avg_eval_tokens_per_request:.2f} tokens/req")
-    print(f"平均输入处理时间: {stats.avg_prompt_time_per_request:.3f} s/req")
-    print(f"平均生成时间:    {stats.avg_eval_time_per_request:.3f} s/req")
-    print("================================================")
+    logging.info("--- 平均每请求统计 ---")
+    logging.info(
+        f"平均输入长度:    {stats.avg_prompt_tokens_per_request:.2f} tokens/req"
+    )
+    logging.info(f"平均生成长度:    {stats.avg_eval_tokens_per_request:.2f} tokens/req")
+    logging.info(f"平均输入处理时间: {stats.avg_prompt_time_per_request:.3f} s/req")
+    logging.info(f"平均生成时间:    {stats.avg_eval_time_per_request:.3f} s/req")
+    logging.info("================================================")
 
 
+# 分析单个日志文件
 if __name__ == "__main__":
-    """命令行使用示例"""
     import sys
 
     if len(sys.argv) > 1:
