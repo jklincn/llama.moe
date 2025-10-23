@@ -1,7 +1,7 @@
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
+from typing import Union, Optional
 import logging
 
 logger = logging.getLogger("log_analysis")
@@ -62,7 +62,7 @@ class PerformanceStats:
         )
 
 
-def log_analysis(log_path: str) -> Optional[PerformanceStats]:
+def log_analysis(log_path: Union[str, Path]) -> Optional[PerformanceStats]:
     """分析llama-server日志文件
 
     Args:

@@ -9,7 +9,6 @@ import gpu_recorder
 from evalscope.config import EvalType, TaskConfig
 from evalscope.run import run_task
 from gguf import GGUFReader
-from log_analysis import log_analysis
 from report import analysis
 
 from llama_moe import LlamaServerWrapper, get_override_rules
@@ -42,9 +41,9 @@ versions_list = ["base", "all_exps_on_cpu", "llama_moe"]
 
 test_models = [
     "Qwen3-30B-A3B-Q8_0",
-    "GLM-4.5-Air-Q8_0",
-    "Qwen3-235B-A22B-Q8_0",
-    "GLM-4.5-Q8_0",
+    # "GLM-4.5-Air-Q8_0",
+    # "Qwen3-235B-A22B-Q8_0",
+    # "GLM-4.5-Q8_0",
     # "DeepSeek-R1-Q4_K_M",
 ]
 test_versions = ["base", "all_exps_on_cpu", "llama_moe"]
@@ -99,8 +98,8 @@ def run_eval(model: str, model_dir: Path, ctx_size: int, logger: logging.Logger)
             "temperature": 0.0,
             "stream": True,
         },
-        limit=3,
-        work_dir=model_dir / "evalscope",
+        limit=4,
+        use_cache=str(model_dir / "evalscope"),
     )
 
     start_time = time.time()
@@ -170,17 +169,12 @@ def main():
 
                 # 开始GPU监控
                 gpu_recorder.start()
-                memory_used, memory_percent = gpu_recorder.get_memory_usage()
-                logger.info("显存使用: %.2f MiB (%.2f%%)", memory_used, memory_percent)
 
                 # 运行评估
                 run_eval(name, model_dir, ctx_size, logger)
 
                 # 结束GPU监控并保存数据
-                gpu_recorder.finish(str(model_dir / "gpu_utilization.npz"))
-
-                # 分析日志获得结果
-                log_analysis(str(model_dir / "llama-server.log"))
+                gpu_recorder.finish(str(model_dir / "gpu_info.npz"))
 
             except Exception as e:
                 logger.exception("运行 %s (%s) 时出错: %s", name, version, e)
@@ -190,7 +184,7 @@ def main():
     logger.info("所有评估完成")
 
     # 生成报告/分析
-    analysis(work_dir)
+    analysis(work_dir, model_order=test_models, version_order=test_versions)
 
 
 if __name__ == "__main__":
