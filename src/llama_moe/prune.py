@@ -1,6 +1,6 @@
 import argparse
 import re
-from gguf import GGUFReader, GGUFWriter, GGUFValueType
+from gguf import GGUFReader, GGUFWriter, GGUFValueType, Keys
 
 from .utils.common import fmt_bytes, pretty
 from .utils.gguf import detect_arch, get_llm_value
@@ -8,79 +8,18 @@ from .utils.gguf import detect_arch, get_llm_value
 EXPS_RE = re.compile(r"^blk\.(\d+)\.(ffn_(?:down|gate|up)_exps)\.weight$")
 
 
-def _normalize_scalar(x):
-    # 兼容 numpy 标量
-    try:
-        import numpy as np
-
-        if isinstance(x, np.generic):
-            return x.item()
-    except Exception:
-        pass
-    return x
-
-
-def _kv_from_reader_field(field):
-    """
-    -> (value, vtype, sub_type)
-    - vtype 来自 field.types[0]
-    - 如果 vtype 是 ARRAY，则 sub_type = field.types[-1]，否则 None
-    - value 用 field.contents() 得到（Python 标量 / 字符串 / list[...]）
-    """
-    vtypes = getattr(field, "types", []) or []
-    if not vtypes:
-        return None, None, None
-
-    main_type = vtypes[0]
-    sub_type = vtypes[-1] if main_type == GGUFValueType.ARRAY else None
-
-    val = field.contents()
-
-    # 规整一下数值类型，避免 numpy 标量/数组残留
-    if isinstance(val, list):
-        val = [_normalize_scalar(v) for v in val]
-    else:
-        val = _normalize_scalar(val)
-
-    return val, main_type, sub_type
-
-def _tensor_raw_info(t):
-    """从 reader 的 tensor 对象拿 shape / raw_dtype / nbytes / raw_bytes。"""
-    # 形状
-    shape = tuple(getattr(t, "shape", None) or t.ne)             # ← 任选其一
-
-    # 原始 ggml dtype（量化类型，如 Q8_0）
-    raw_dtype = getattr(t, "dtype", None) or getattr(t, "ggml_type", None)  # ← 任选其一
-
-    # 原始字节大小
-    nbytes = getattr(t, "nbytes", None)
-    if nbytes is None:
-        raw = getattr(t, "raw", None)
-        if raw is not None:
-            nbytes = len(raw)
+def copy_all_metadata(reader: GGUFReader, writer: GGUFWriter) -> None:
+    # 基本与 gguf_new_metadata.py 的 copy 逻辑一致：跳过 GGUF.* 与 ARCHITECTURE 虚拟键
+    for field in reader.fields.values():
+        if field.name == Keys.General.ARCHITECTURE or field.name.startswith("GGUF."):
+            continue
+        # 直接按原类型和值写回（数组保持子类型）
+        val_type = field.types[0] if field.types else None
+        sub_type = field.types[-1] if field.types and field.types[0] == GGUFValueType.ARRAY else None
+        if val_type is not None:
+            writer.add_key_value(field.name, field.contents(), val_type, sub_type=sub_type)
         else:
-            raw = getattr(t, "data", None)
-            nbytes = len(raw) if raw is not None else None
-
-    # 原始字节数据（bytes / memoryview）
-    raw_data = getattr(t, "raw", None)
-    if raw_data is None:
-        raw_data = getattr(t, "data", None)   # 某些实现把“原始块”也挂在 data 上（注意不要是解码后的 numpy）
-
-    if raw_dtype is None or nbytes is None or raw_data is None:
-        raise RuntimeError("Cannot obtain raw tensor info; check your GGUFReader tensor attributes")
-
-    return shape, raw_dtype, nbytes, raw_data
-
-def add_tensor_raw(writer: GGUFWriter, name, shape, raw_dtype, nbytes, raw_data):
-    """
-    走 'info + data' 的原样写回通道：
-      - 先声明 tensor 信息（包括 raw_dtype）
-      - 再喂入 raw bytes
-    这样不会触发 'Only F16/F32/...' 的 dtype 限制。
-    """
-    writer.add_tensor_info(name, shape, raw_dtype, nbytes, raw_dtype=raw_dtype)
-    writer.add_tensor_data(raw_data)
+            raise ValueError(f"无法处理的字段类型: {field.name}")
 
 def prune_gguf_file(reader: GGUFReader, writer: GGUFWriter):
     # ---------- 打印 KV ----------
@@ -103,14 +42,6 @@ def prune_gguf_file(reader: GGUFReader, writer: GGUFWriter):
     print(f"专家总数: {expert_count}, 使用的专家数: {expert_used_count}")
     print(f"嵌入维度: {embedding_length}")
     print(f"专家前馈长度: {expert_feed_forward_length}")
-
-    # 复制所有 kv
-    for key, field in reader.fields.items():
-        val, vtype, sub_type = _kv_from_reader_field(field)
-        if vtype is None:
-            # 跳过空字段（理论上不会发生）
-            continue
-        writer.add_key_value(key, val, vtype, sub_type)
 
     for tensor in reader.tensors:
         name = tensor.name
@@ -149,7 +80,6 @@ def prune_gguf_file(reader: GGUFReader, writer: GGUFWriter):
                 writer.add_tensor(name, arr, dtype=dtype)
             case _:
                 raise ValueError(f"unknown part name: {part_name}")
-    return
     # ---------- 打印 Tensors ----------
     print("Tensors:")
     header = "{:<36} | {:<15} | {:>12} | {:>10} | {}"

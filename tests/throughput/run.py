@@ -41,12 +41,12 @@ versions_list = ["base", "all_exps_on_cpu", "llama_moe"]
 
 test_models = [
     "Qwen3-30B-A3B-Q8_0",
-    # "GLM-4.5-Air-Q8_0",
+    "GLM-4.5-Air-Q8_0",
     # "Qwen3-235B-A22B-Q8_0",
     # "GLM-4.5-Q8_0",
     # "DeepSeek-R1-Q4_K_M",
 ]
-test_versions = ["base", "all_exps_on_cpu", "llama_moe"]
+test_versions = ["base", "llama_moe"]
 
 
 def setup_logging(log_file: Path, level=logging.INFO):
@@ -98,7 +98,7 @@ def run_eval(model: str, model_dir: Path, ctx_size: int, logger: logging.Logger)
             "temperature": 0.0,
             "stream": True,
         },
-        limit=4,
+        limit=1,
         use_cache=str(model_dir / "evalscope"),
     )
 
