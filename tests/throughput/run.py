@@ -31,11 +31,6 @@ model_list = {
         "path": "/mnt/data/gguf/GLM-4.5-Q8_0.gguf",
         "base": ["--n-gpu-layers", "6"],
     },
-    # KV Cache 太大了
-    "DeepSeek-R1-Q4_K_M": {
-        "path": "/mnt/data/gguf/DeepSeek-R1-Q4_K_M.gguf",
-        "base": ["--n-gpu-layers", "2"],
-    },
 }
 versions_list = ["base", "all_exps_on_cpu", "llama_moe"]
 
@@ -44,7 +39,6 @@ test_models = [
     "GLM-4.5-Air-Q8_0",
     # "Qwen3-235B-A22B-Q8_0",
     # "GLM-4.5-Q8_0",
-    # "DeepSeek-R1-Q4_K_M",
 ]
 test_versions = ["base", "llama_moe"]
 
