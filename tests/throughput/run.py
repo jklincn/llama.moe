@@ -32,7 +32,7 @@ model_list = {
         "base": ["--n-gpu-layers", "6"],
     },
 }
-versions_list = ["base", "all_exps_on_cpu", "llama_moe"]
+versions_list = ["base", "llama_moe"]
 
 test_models = [
     "Qwen3-30B-A3B-Q8_0",
@@ -145,8 +145,6 @@ def main():
             match version:
                 case "base":
                     final_arg += model["base"]
-                case "all_exps_on_cpu":
-                    final_arg += ["--n-gpu-layers", "999", "--cpu-moe"]
                 case "llama_moe":
                     final_arg += get_override_rules(GGUFReader(path), ctx_size)
 

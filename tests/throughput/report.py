@@ -284,9 +284,8 @@ if __name__ == "__main__":
         "GLM-4.5-Air-Q8_0",
         "Qwen3-235B-A22B-Q8_0",
         "GLM-4.5-Q8_0",
-        # "DeepSeek-R1-Q4_K_M",
     ]
-    test_versions = ["base", "all_exps_on_cpu", "llama_moe"]
+    test_versions = ["base", "llama_moe"]
     analysis(
         Path(args.results_path), model_order=test_models, version_order=test_versions
     )
