@@ -26,3 +26,6 @@ outputs/
 
 # created by tests/throughput/run.py
 tests/throughput/results*
+
+# created by scripts/build_stream.sh
+tests/utils/stream/stream
