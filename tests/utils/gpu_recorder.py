@@ -1,10 +1,10 @@
+import logging
 import threading
 import time
 from pathlib import Path
 
 import numpy as np
 import pynvml as nvml
-import logging
 
 logger = logging.getLogger("gpu_recorder")
 

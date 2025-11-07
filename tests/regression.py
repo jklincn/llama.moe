@@ -5,13 +5,14 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-import gpu_recorder
 from evalscope.config import EvalType, TaskConfig
 from evalscope.run import run_task
 from gguf import GGUFReader
-from report import analysis
 
 from llama_moe import LlamaServerWrapper, get_override_rules
+
+from utils import gpu_recorder
+from utils.results_analysis import analysis
 
 ctx_size = 4096
 model_list = {
@@ -37,8 +38,8 @@ versions_list = ["base", "llama_moe"]
 test_models = [
     "Qwen3-30B-A3B-Q8_0",
     "GLM-4.5-Air-Q8_0",
-    # "Qwen3-235B-A22B-Q8_0",
-    # "GLM-4.5-Q8_0",
+    "Qwen3-235B-A22B-Q8_0",
+    "GLM-4.5-Q8_0",
 ]
 test_versions = ["base", "llama_moe"]
 
@@ -77,12 +78,14 @@ def setup_logging(log_file: Path, level=logging.INFO):
 
 
 def run_eval(model: str, model_dir: Path, ctx_size: int, logger: logging.Logger):
+    # datasets
+    # - gsm8k
+    # - mmlu
+    datasets = ["gsm8k"]
+    limit = 1
     task_config = TaskConfig(
         model=model,
-        # datasets
-        # - gsm8k
-        # - mmlu
-        datasets=["gsm8k"],
+        datasets=datasets,
         eval_type=EvalType.SERVICE,
         eval_batch_size=1,
         api_url="http://127.0.0.1:8080/v1/chat/completions",
@@ -92,10 +95,10 @@ def run_eval(model: str, model_dir: Path, ctx_size: int, logger: logging.Logger)
             "temperature": 0.0,
             "stream": True,
         },
-        limit=1,
+        limit=limit,
         use_cache=str(model_dir / "evalscope"),
     )
-
+    logger.info(f"评估数据集 {datasets}, 限制样本数: {limit}")
     start_time = time.time()
     logger.info("开始启动评估")
 
@@ -107,7 +110,7 @@ def run_eval(model: str, model_dir: Path, ctx_size: int, logger: logging.Logger)
 
 def main():
     base_dir = Path(__file__).resolve().parent
-    bin_path = base_dir.parent.parent / "llama.cpp" / "build" / "bin" / "llama-server"
+    bin_path = base_dir.parent / "llama.cpp" / "build" / "bin" / "llama-server"
     run_timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     work_dir = base_dir / f"results-{run_timestamp}"
     work_dir.mkdir(exist_ok=True)
@@ -178,6 +181,10 @@ def main():
     # 生成报告/分析
     analysis(work_dir, model_order=test_models, version_order=test_versions)
 
+
+# usage:
+# cd llama.moe
+# python tests/regression.py
 
 if __name__ == "__main__":
     main()

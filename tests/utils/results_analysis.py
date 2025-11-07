@@ -6,10 +6,11 @@ import re
 from pathlib import Path
 
 import numpy as np
-from gpu_recorder import load_gpu_info
 from rich import box
 from rich.console import Console
 from rich.table import Table
+
+from .gpu_recorder import load_gpu_info
 
 logger = logging.getLogger("report")
 
@@ -176,6 +177,7 @@ def fmt_int(v: int) -> str:
     return f"{int(v):,}"
 
 
+# 对 results 目录进行分析
 def analysis(
     results_path: Path,
     model_order: list[str] | None = None,
@@ -270,12 +272,15 @@ def analysis(
         console.print()
 
 
+# usage:
+# cd llama.moe
+# python -m tests.utils.results_analysis PATH
+
 if __name__ == "__main__":
     argparse = argparse.ArgumentParser(description="Result Analysis")
     argparse.add_argument(
         "results_path",
         type=str,
-        default="./results",
         help="Path to the results directory",
     )
     args = argparse.parse_args()
@@ -286,6 +291,4 @@ if __name__ == "__main__":
         "GLM-4.5-Q8_0",
     ]
     test_versions = ["base", "llama_moe"]
-    analysis(
-        Path(args.results_path), model_order=test_models, version_order=test_versions
-    )
+    analysis(Path(args.results_path), test_models, test_versions)

@@ -5,7 +5,6 @@
 # - /mnt/data/gguf/GLM-4.5-Air-Q8_0.gguf
 # - /mnt/data/gguf/Qwen3-235B-A22B-Q8_0.gguf
 # - /mnt/data/gguf/GLM-4.5-Q8_0.gguf
-# - /mnt/data/gguf/DeepSeek-R1-Q4_K_M.gguf
 model="/mnt/data/gguf/Qwen3-30B-A3B-Q8_0.gguf"
 llama-moe --model $model \
     --seed 0 \

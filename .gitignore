@@ -5,27 +5,22 @@ build/
 dist/
 wheels/
 *.egg-info
+.cache/
 
 # Virtual environments
 .venv
 
-# log
+# logs
 *.log
 
-# created by llama.cpp/ggml/src/ggml-moe.cpp
-expert_activations.csv
+# csv
+*.csv
 
 # created by scripts/expert_activation_analysis.py
 expert_activation_heatmap.png
-expert_proportions.csv
 
-# created by tests/eval/*.py
-.cache/
-results/
-outputs/
-
-# created by tests/throughput/run.py
-tests/throughput/results*
+# created by tests/throughput.py
+tests/results*
 
 # created by scripts/build_stream.sh
 tests/utils/stream/stream
