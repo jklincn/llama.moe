@@ -21,6 +21,3 @@ expert_activation_heatmap.png
 
 # created by tests/throughput.py
 tests/results*
-
-# created by scripts/build_stream.sh
-tests/utils/stream/stream

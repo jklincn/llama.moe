@@ -35,15 +35,13 @@ cmake_args=(
     -D CMAKE_CUDA_ARCHITECTURES=89
     -D LLAMA_BUILD_COMMON=ON
     -D LLAMA_BUILD_TOOLS=ON
-#   -D LLAMA_BUILD_EXAMPLES=OFF
-#   -D LLAMA_BUILD_TESTS=OFF
     -D LLAMA_BUILD_SERVER=ON
 )
 
 [[ -n "${extra_flags}" ]] && cmake_args+=( -D CMAKE_CXX_FLAGS="${extra_flags}" )
 
 # ----------------------------------------------------------------------
-# 4. 可选：在 Debug 模式打开 GGML_DEBUG 宏（自动恢复）
+# 4. 在 Debug 模式打开 GGML_DEBUG 宏（自动恢复）
 # ----------------------------------------------------------------------
 pushd "${repo_root}" >/dev/null
 rm -rf build
