@@ -7,3 +7,6 @@
 [submodule "tests/utils/stream"]
 	path = tests/utils/stream
 	url = https://github.com/jeffhammond/STREAM.git
+[submodule "tests/utils/nvbandwidth"]
+	path = tests/utils/nvbandwidth
+	url = https://github.com/NVIDIA/nvbandwidth.git
