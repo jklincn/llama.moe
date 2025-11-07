@@ -38,18 +38,3 @@ modelscope download --model unsloth/GLM-4.5-GGUF --include Q8_0/*
 # 62d0fb3d69b8e7c49a2b632f665f19553a9c0d8b3bb385bc1c91538e5117147e  GLM-4.5-Q8_0-00006-of-00008.gguf
 # 4e14848499bda38448fc214cac7bbddbfbeba17a40f8d2c9f003271af20f17db  GLM-4.5-Q8_0-00007-of-00008.gguf
 # 8ab94c69069626babf50100e6cda3d159973bb0ce01283742bf561576a00f9e0  GLM-4.5-Q8_0-00008-of-00008.gguf
-
-
-# ==================== DeepSeek-R1-Q4_K_M (671B-A37B) ========================
-modelscope download --model unsloth/DeepSeek-R1-GGUF --include DeepSeek-R1-Q4_K_M/*
-# commit: 5bd2e6a771836db3054222ab8ea29bf1e22d2cb5
-# sha256:
-# d111d9e28b4035e6781906b6451b7866737b4a4ee734baa1575c55d8aa1b4200  DeepSeek-R1-Q4_K_M-00001-of-00009.gguf
-# bc15645dcad23f664f5186a261752cf360af289da0e5701d47330763a8a30ef5  DeepSeek-R1-Q4_K_M-00002-of-00009.gguf
-# 5153167c9e62ca5e8c14e804506dd8a1020cc824e88166ae50f4d2cdad039399  DeepSeek-R1-Q4_K_M-00003-of-00009.gguf
-# 26e3849c55a2d51e2bdaca9b9fc18b3a07f27513454c3eef9b3f95050d3a2878  DeepSeek-R1-Q4_K_M-00004-of-00009.gguf
-# b0c741ab4e2960b574e4735a1e847a159e3371213d5be2b189d1d2ffd6388298  DeepSeek-R1-Q4_K_M-00005-of-00009.gguf
-# e081b8ee5458c37dc891d1b0a93d9b7f4c14285a52feb1083a75c489a06a8e00  DeepSeek-R1-Q4_K_M-00006-of-00009.gguf
-# e4673ab73c3b3b6dbc971c511ee63b9daf03cb9aa173817616eb60c824f3434b  DeepSeek-R1-Q4_K_M-00007-of-00009.gguf
-# b960c2e008db2cdda42e163bda1187ca9516c6248fa14d71671a9c4993c7e401  DeepSeek-R1-Q4_K_M-00008-of-00009.gguf
-# a2cedd446437830456b9378410560f2bf7f1041cab6a929b14330c1112706d47  DeepSeek-R1-Q4_K_M-00009-of-00009.gguf
