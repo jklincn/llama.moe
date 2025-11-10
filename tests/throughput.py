@@ -43,7 +43,11 @@ test_models = [
 test_versions = ["base", "llama_moe"]
 
 
-def setup_logging(log_file: Path, level=logging.INFO):
+def setup_logging(log_file: Path):
+    if os.getenv("LLAMA_MOE_DEBUG") == "1":
+        level = logging.DEBUG
+    else:
+        level = logging.INFO
     LOGGING_CONFIG = {
         "version": 1,
         "disable_existing_loggers": False,
@@ -116,12 +120,9 @@ def main():
 
     # 创建主日志文件并初始化全局日志
     log_file = work_dir / "run.log"
-    if os.getenv("LLAMA_MOE_DEBUG") == "1":
-        setup_logging(log_file=log_file, level=logging.DEBUG)
-    else:
-        setup_logging(log_file=log_file, level=logging.INFO)
-    logger = logging.getLogger("run_test")
-    logger.info("日志初始化完成，日志文件：%s", log_file)
+    setup_logging(log_file=log_file)
+    print("日志文件: ", log_file)
+    logger = logging.getLogger("throughput")
 
     # fmt: off
     common_args = [
@@ -160,6 +161,8 @@ def main():
                 if pid < 0:
                     logger.error("启动 %s (%s) 失败", name, version)
                     exit(1)
+                else:
+                    logger.info("llama-server 启动成功, PID: %d", pid)
 
                 # 开始GPU监控
                 gpu_recorder.start()
@@ -180,10 +183,6 @@ def main():
     # 生成报告/分析
     analysis(work_dir, model_order=test_models, version_order=test_versions)
 
-
-# usage:
-# cd llama.moe
-# python tests/throughput.py
 
 if __name__ == "__main__":
     main()

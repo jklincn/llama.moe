@@ -42,6 +42,7 @@ def main():
     parser.add_argument("--n-cpu-moe", "-ncmoe", dest="n-cpu-moe", type=str, default=None)
     parser.add_argument("--cache-type-k", "-ctk", dest="cache-type-k", type=str, default=None)
     parser.add_argument("--cache-type-v", "-ctv", dest="cache-type-v", type=str, default=None)
+    parser.add_argument("--numa", dest="numa", type=str, default=None)
     # fmt: on
 
     args, other = parser.parse_known_args()

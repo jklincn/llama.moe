@@ -10,6 +10,18 @@ from typing import Optional
 logger = logging.getLogger("wrapper")
 
 
+def numa_check():
+    path = "/sys/devices/system/node/has_cpu"
+    with open(path, "r") as f:
+        content = f.read().strip()
+    if content == "0":
+        return False
+    elif content == "0-1":
+        return True
+    else:
+        raise ValueError("暂不支持大于2个NUMA节点的系统")
+
+
 class LlamaServerWrapper:
     def __init__(
         self,
@@ -50,9 +62,21 @@ class LlamaServerWrapper:
     def run(self, argv: list[str], timeout: int = 60) -> int:
         if self.process and self.process.poll() is None:
             raise RuntimeError("llama-server 已在运行，请先 stop().")
-
-        cmd = [self.bin_path] + argv
-
+        if numa_check():
+            cpu_count = os.cpu_count()
+            numactl = [
+                "numactl",
+                f"--physcpubind=0-{cpu_count // 2 - 1}",
+                "--membind=0,1",
+            ]
+            cmd = (
+                numactl
+                + [self.bin_path]
+                + argv
+                + ["--numa", "numactl", "-t", str(cpu_count // 2)]
+            )
+        else:
+            cmd = [self.bin_path] + argv
         logger.debug(f"启动命令: {' '.join(cmd)}")
         logger.debug(f"日志文件: {self.log_path}")
 

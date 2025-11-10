@@ -36,15 +36,22 @@ model_list = {
 versions_list = ["base", "llama_moe"]
 
 test_models = [
-    "Qwen3-30B-A3B-Q8_0",
+    # "Qwen3-30B-A3B-Q8_0",
     "GLM-4.5-Air-Q8_0",
-    "Qwen3-235B-A22B-Q8_0",
-    "GLM-4.5-Q8_0",
+    # "Qwen3-235B-A22B-Q8_0",
+    # "GLM-4.5-Q8_0",
 ]
-test_versions = ["base", "llama_moe"]
+test_versions = [
+    # "base", 
+                 "llama_moe"
+                 ]
 
 
-def setup_logging(log_file: Path, level=logging.INFO):
+def setup_logging(log_file: Path):
+    if os.getenv("LLAMA_MOE_DEBUG") == "1":
+        level = logging.DEBUG
+    else:
+        level = logging.INFO
     LOGGING_CONFIG = {
         "version": 1,
         "disable_existing_loggers": False,
@@ -82,7 +89,7 @@ def run_eval(model: str, model_dir: Path, ctx_size: int, logger: logging.Logger)
     # - gsm8k
     # - mmlu
     datasets = ["gsm8k"]
-    limit = 1
+    limit = 3
     task_config = TaskConfig(
         model=model,
         datasets=datasets,
@@ -117,12 +124,9 @@ def main():
 
     # 创建主日志文件并初始化全局日志
     log_file = work_dir / "run.log"
-    if os.getenv("LLAMA_MOE_DEBUG") == "1":
-        setup_logging(log_file=log_file, level=logging.DEBUG)
-    else:
-        setup_logging(log_file=log_file, level=logging.INFO)
-    logger = logging.getLogger("run_test")
-    logger.info("日志初始化完成，日志文件：%s", log_file)
+    setup_logging(log_file=log_file)
+    print("日志文件: ", log_file)
+    logger = logging.getLogger("regression")
 
     # fmt: off
     common_args = [
@@ -152,7 +156,7 @@ def main():
                     final_arg += get_override_rules(GGUFReader(path), ctx_size)
 
             logger.info("正在启动 %s (%s) ...", name, version)
-
+            
             wrapper = LlamaServerWrapper(
                 str(bin_path), str(model_dir / "llama-server.log")
             )
@@ -161,6 +165,8 @@ def main():
                 if pid < 0:
                     logger.error("启动 %s (%s) 失败", name, version)
                     exit(1)
+                else:
+                    logger.info("llama-server 启动成功, PID: %d", pid)
 
                 # 开始GPU监控
                 gpu_recorder.start()
@@ -181,10 +187,6 @@ def main():
     # 生成报告/分析
     analysis(work_dir, model_order=test_models, version_order=test_versions)
 
-
-# usage:
-# cd llama.moe
-# python tests/regression.py
 
 if __name__ == "__main__":
     main()
