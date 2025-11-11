@@ -212,8 +212,8 @@ def analysis(
         ("tps_prompt", "TPS(P)"),
         ("tps_eval", "TPS(E)"),
         ("score", "Score"),
-        ("gpu_util", "GPU Util(AVG/MAX)"),
-        ("mem_util", "Mem Util(AVG/MAX)"),
+        ("gpu_util", "GPU Util"),
+        ("mem_util", "Mem Util"),
         ("mem_avg", "Mem Used"),
     ]
 
@@ -259,9 +259,9 @@ def analysis(
                 elif key == "score":
                     row_cells.append(fmt_float(r["score"], 2))
                 elif key == "gpu_util":
-                    row_cells.append(f"{r['gpu_util_avg']}% ({r['gpu_util_max']}%)")
+                    row_cells.append(f"{r['gpu_util_avg']}%")
                 elif key == "mem_util":
-                    row_cells.append(f"{r['mem_util_avg']}% ({r['mem_util_max']}%)")
+                    row_cells.append(f"{r['mem_util_avg']}%")
                 elif key == "mem_avg":
                     row_cells.append(f"{r['mem_avg']:.1f}%")
                 else:

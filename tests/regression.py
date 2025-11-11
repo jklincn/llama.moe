@@ -36,8 +36,8 @@ model_list = {
 versions_list = ["base", "llama_moe"]
 
 test_models = [
-    # "Qwen3-30B-A3B-Q8_0",
-    "GLM-4.5-Air-Q8_0",
+    "Qwen3-30B-A3B-Q8_0",
+    # "GLM-4.5-Air-Q8_0",
     # "Qwen3-235B-A22B-Q8_0",
     # "GLM-4.5-Q8_0",
 ]
@@ -89,7 +89,7 @@ def run_eval(model: str, model_dir: Path, ctx_size: int, logger: logging.Logger)
     # - gsm8k
     # - mmlu
     datasets = ["gsm8k"]
-    limit = 3
+    limit = 1
     task_config = TaskConfig(
         model=model,
         datasets=datasets,

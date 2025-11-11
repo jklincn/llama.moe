@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+# apt install ccache
+
 set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -8,7 +10,7 @@ repo_root="${script_dir}/../tests/utils/pcm"
 rm -rf build/pcm
 mkdir -p build/pcm
 cd build/pcm
-cmake "$repo_root"
+cmake -DCMAKE_CXX_COMPILER_LAUNCHER=ccache "$repo_root"
 cmake --build . --parallel --config Release
 exit 0
 

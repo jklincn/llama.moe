@@ -3,7 +3,7 @@
 	url = https://github.com/jklincn/llama.cpp.git
 [submodule "tests/utils/pcm"]
 	path = tests/utils/pcm
-	url = https://github.com/intel/pcm.git
+	url = https://github.com/jklincn/pcm.git
 [submodule "tests/utils/stream"]
 	path = tests/utils/stream
 	url = https://github.com/jeffhammond/STREAM.git
