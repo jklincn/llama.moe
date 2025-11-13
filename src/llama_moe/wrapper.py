@@ -67,7 +67,7 @@ class LlamaServerWrapper:
             numactl = [
                 "numactl",
                 f"--physcpubind=0-{cpu_count // 2 - 1}",
-                "--membind=0,1",
+                "--interleave=all",
             ]
             cmd = (
                 numactl
