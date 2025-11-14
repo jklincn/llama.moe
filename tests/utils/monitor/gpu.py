@@ -1,7 +1,7 @@
-from typing import List, Tuple
-from datetime import datetime
 import threading
 import time
+from datetime import datetime
+from typing import List, Tuple
 
 import pynvml as nvml
 
@@ -24,12 +24,16 @@ class GPUMonitor:
         self._thread = None
 
         self._handle = None
+        self._nvml_inited = False
 
     def _nvml_init(self):
+        if self._nvml_inited:
+            return
         nvml.nvmlInit()
         count = nvml.nvmlDeviceGetCount()
         if count <= self.device_index:
             nvml.nvmlShutdown()
+            self._nvml_inited = False
             raise RuntimeError(
                 f"GPU index {self.device_index} out of range (found {count} device(s))"
             )
@@ -37,6 +41,8 @@ class GPUMonitor:
         self._nvml_inited = True
 
     def _nvml_shutdown(self):
+        if not self._nvml_inited:
+            return
         nvml.nvmlShutdown()
         self._nvml_inited = False
         self._handle = None
@@ -62,3 +68,18 @@ class GPUMonitor:
         self._thread.join()
         self._nvml_shutdown()
         return self.gpu_data
+
+    def get_gpu_total_memory(self) -> int:
+        temporary_init = False
+        if self._handle is None or not self._nvml_inited:
+            self._nvml_init()
+            temporary_init = True
+
+        try:
+            memory_info = nvml.nvmlDeviceGetMemoryInfo(self._handle)
+            return memory_info.total
+        except Exception as e:
+            raise RuntimeError(f"获取GPU总内存失败: {e}")
+        finally:
+            if temporary_init:
+                self._nvml_shutdown()

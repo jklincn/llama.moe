@@ -1,6 +1,7 @@
 import logging
 import logging.config
 import os
+import subprocess
 import time
 from datetime import datetime
 from pathlib import Path
@@ -13,6 +14,7 @@ from utils.monitor import SysMonitor, draw
 from utils.results_analysis import analysis
 
 from llama_moe import LlamaServerWrapper, get_override_rules
+from llama_moe.core import check_numa
 
 ctx_size = 4096
 model_list = {
@@ -36,13 +38,13 @@ model_list = {
 versions_list = ["base", "llama_moe"]
 
 test_models = [
-    # "Qwen3-30B-A3B-Q8_0",
-    # "GLM-4.5-Air-Q8_0",
+    "Qwen3-30B-A3B-Q8_0",
+    "GLM-4.5-Air-Q8_0",
     "Qwen3-235B-A22B-Q8_0",
     # "GLM-4.5-Q8_0",
 ]
 test_versions = [
-    # "base",
+    "base",
     "llama_moe",
 ]
 
@@ -116,6 +118,11 @@ def run_eval(model: str, model_dir: Path, ctx_size: int, logger: logging.Logger)
     logger.info("结束评估, 用时 %.2f 秒", end_time - start_time)
 
 
+def clear_page_cache():
+    command = "sudo sh -c 'echo 3 > /proc/sys/vm/drop_caches'"
+    subprocess.run(command, shell=True, check=True, capture_output=True, text=True)
+
+
 def main():
     base_dir = Path(__file__).resolve().parent
     bin_path = base_dir.parent / "llama.cpp" / "build" / "bin" / "llama-server"
@@ -150,19 +157,28 @@ def main():
             path = model["path"]
             final_arg = common_args + ["--model", path]
 
+            clear_page_cache()
+            logger.info(f"正在启动 {name} ({version}) ...")
+
             match version:
                 case "base":
                     final_arg += model["base"]
+                    wrapper = LlamaServerWrapper(
+                        str(bin_path), str(model_dir / "llama-server.log")
+                    )
                 case "llama_moe":
-                    final_arg += get_override_rules(GGUFReader(path), ctx_size)
+                    numactl_cmd, numa_args = check_numa(path)
+                    final_arg += (
+                        get_override_rules(GGUFReader(path), ctx_size) + numa_args
+                    )
+                    wrapper = LlamaServerWrapper(
+                        str(bin_path),
+                        str(model_dir / "llama-server.log"),
+                        numactl=numactl_cmd,
+                    )
 
-            logger.info(f"正在启动 {name} ({version}) ...")
-
-            wrapper = LlamaServerWrapper(
-                str(bin_path), str(model_dir / "llama-server.log")
-            )
             try:
-                pid = wrapper.run(final_arg, timeout=3600)
+                pid = wrapper.start(final_arg, timeout=3600)
                 if pid < 0:
                     logger.error(f"启动 {name} ({version}) 失败")
                     exit(1)
@@ -183,7 +199,7 @@ def main():
                 logger.exception(f"运行 {name} ({version}) 时出错: {e}")
             finally:
                 wrapper.stop()
-            
+
             draw(
                 results,
                 title=f"{name} ({version})",

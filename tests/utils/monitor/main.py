@@ -70,6 +70,8 @@ class SysMonitor:
             for key, series in results.items():
                 for ts, val in series:
                     writer.writerow([key, ts.isoformat(), val])
+            memory_total = self.gpu_monitor.get_gpu_total_memory()
+            writer.writerow(["gpu_memory_total_bytes", "", memory_total])
 
     def start(self):
         self._parallel_call(
@@ -80,7 +82,7 @@ class SysMonitor:
                 ("gpu_start", self.gpu_monitor.start),
             ]
         )
-        time.sleep(3) # pcm 需要一些启动时间
+        time.sleep(3)  # pcm 需要一些启动时间
 
     def end(self, save_path: Path | None = None):
         results = self._parallel_call(
@@ -123,7 +125,7 @@ def draw(
     # --- 1. 数据准备 ---
     max_memory_bw = _cached_memory_bw()
     max_pcie_bw = _cached_pcie_bw()
-    
+
     # 原始数据
     cpu_util = data.get("cpu_util", [])
     mem_bw = data.get("mem_bw", [])
@@ -138,8 +140,14 @@ def draw(
     cpu_util = [(ts, min(x * 2, 100)) for ts, x in cpu_util]
 
     # --- 关键修正步骤 1: 找到所有数据系列中最晚的起始时间 ---
-    all_series = [cpu_util, mem_bw_percent, pcie_bw_percent, gpu_core_util, gpu_mem_util]
-    
+    all_series = [
+        cpu_util,
+        mem_bw_percent,
+        pcie_bw_percent,
+        gpu_core_util,
+        gpu_mem_util,
+    ]
+
     # 收集所有非空数据系列的第一个时间戳
     start_times = [series[0][0] for series in all_series if series]
 
@@ -147,7 +155,7 @@ def draw(
     if not start_times:
         print("警告：所有监控数据均为空，无法生成图表。")
         return
-        
+
     # global_start_time 就是我们需要的“有效起点”
     global_start_time = max(start_times)
 
@@ -157,7 +165,9 @@ def draw(
         # 步骤2: 过滤掉早于 global_start_time 的数据
         filtered_series = [(ts, val) for ts, val in series if ts >= start_dt]
         # 步骤3: 时间戳重新归零
-        rebased_series = [((ts - start_dt).total_seconds(), val) for ts, val in filtered_series]
+        rebased_series = [
+            ((ts - start_dt).total_seconds(), val) for ts, val in filtered_series
+        ]
         return rebased_series
 
     cpu_util_rel = filter_and_rebase(cpu_util, global_start_time)
@@ -188,15 +198,31 @@ def draw(
                 elif "decode start:" in line:
                     timestamp_str = line.split("decode start:")[1].strip()
                     decode_ts_strings.append(timestamp_str)
-        
+
         time_format = "%Y-%m-%d %H:%M:%S.%f"
-        prompt_times = [(datetime.strptime(ts, time_format) - global_start_time).total_seconds() for ts in prompt_ts_strings]
-        decode_times = [(datetime.strptime(ts, time_format) - global_start_time).total_seconds() for ts in decode_ts_strings]
-            
+        prompt_times = [
+            (datetime.strptime(ts, time_format) - global_start_time).total_seconds()
+            for ts in prompt_ts_strings
+        ]
+        decode_times = [
+            (datetime.strptime(ts, time_format) - global_start_time).total_seconds()
+            for ts in decode_ts_strings
+        ]
+
         for i, t in enumerate(prompt_times):
-            plt.axvline(x=t, color="red", linestyle="--", label="Prompt Start" if i == 0 else None)
+            plt.axvline(
+                x=t,
+                color="red",
+                linestyle="--",
+                label="Prompt Start" if i == 0 else None,
+            )
         for i, t in enumerate(decode_times):
-            plt.axvline(x=t, color="green", linestyle="--", label="Decode Start" if i == 0 else None)
+            plt.axvline(
+                x=t,
+                color="green",
+                linestyle="--",
+                label="Decode Start" if i == 0 else None,
+            )
 
     # --- 4. 设置图表属性 ---
     plt.title(title, fontsize=16)

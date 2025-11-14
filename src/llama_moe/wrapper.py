@@ -5,21 +5,9 @@ import subprocess
 import threading
 import time
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Sequence
 
 logger = logging.getLogger("wrapper")
-
-
-def numa_check():
-    path = "/sys/devices/system/node/has_cpu"
-    with open(path, "r") as f:
-        content = f.read().strip()
-    if content == "0":
-        return False
-    elif content == "0-1":
-        return True
-    else:
-        raise ValueError("暂不支持大于2个NUMA节点的系统")
 
 
 class LlamaServerWrapper:
@@ -27,10 +15,14 @@ class LlamaServerWrapper:
         self,
         bin_path: str = "llama.cpp/build/bin/llama-server",
         log_filename: str = "llama-server.log",
+        numactl: Optional[Sequence[str]] = None,
     ):
         if not Path(bin_path).is_file():
             raise FileNotFoundError("找不到 llama-server 可执行文件, 请先进行编译")
         self.bin_path = bin_path
+        self.numactl: Optional[list[str]] = (
+            list(numactl) if numactl is not None else None
+        )
         self.process: Optional[subprocess.Popen] = None
         self.output_thread: Optional[threading.Thread] = None
         self._log_file: Optional[object] = None
@@ -59,24 +51,15 @@ class LlamaServerWrapper:
             except Exception:
                 pass
 
-    def run(self, argv: list[str], timeout: int = 60) -> int:
+    def start(self, argv: list[str], timeout: int = 60) -> int:
         if self.process and self.process.poll() is None:
             raise RuntimeError("llama-server 已在运行，请先 stop().")
-        if numa_check():
-            cpu_count = os.cpu_count()
-            numactl = [
-                "numactl",
-                f"--physcpubind=0-{cpu_count // 2 - 1}",
-                "--interleave=all",
-            ]
-            cmd = (
-                numactl
-                + [self.bin_path]
-                + argv
-                + ["--numa", "numactl", "-t", str(cpu_count // 2)]
-            )
-        else:
-            cmd = [self.bin_path] + argv
+
+        cmd = [self.bin_path] + argv
+
+        if self.numactl:
+            cmd = self.numactl + cmd
+
         logger.debug(f"启动命令: {' '.join(cmd)}")
         logger.debug(f"日志文件: {self.log_path}")
 
@@ -143,36 +126,37 @@ class LlamaServerWrapper:
 
         return self.process.pid
 
-    def stop(self, signum: int = signal.SIGTERM) -> None:
-        """
-        发送信号给子进程组，并等待其退出
-        """
+    def stop(self) -> None:
         if not self.process:
             logger.debug("stop: 未发现子进程。")
             return
-        if self.process.poll() is not None:
+
+        already_exited = self.process.poll() is not None
+
+        if already_exited:
             logger.debug("stop: 子进程已退出。")
-            return
+        else:
+            try:
+                pgid = os.getpgid(self.process.pid)
+                os.killpg(pgid, signal.SIGTERM)
+            except ProcessLookupError:
+                logger.warning("stop: 进程不存在或已退出。")
+            except Exception as e:
+                logger.error(f"stop: 发送信号失败：{e}")
 
-        try:
-            pgid = os.getpgid(self.process.pid)
-            os.killpg(pgid, signum)
-        except ProcessLookupError:
-            logger.warning("stop: 进程不存在或已退出。")
-        except Exception as e:
-            logger.error(f"stop: 发送信号失败：{e}")
+            try:
+                return_code = self.process.wait(timeout=60)
+                if return_code != 0:
+                    logger.warning(f"llama-server 退出异常, 子返回码 {return_code}")
+            except subprocess.TimeoutExpired:
+                logger.error("llama-server 退出超时")
 
-        # 等待退出
-        try:
-            rc = self.process.wait(timeout=60)
-            if rc != 0:
-                logger.warning(f"llama-server 退出异常, 子返回码 {rc}")
-        except TimeoutError:
-            logger.error("llama-server 退出超时")
-        finally:
-            if self.output_thread and self.output_thread.is_alive():
-                self.output_thread.join(timeout=5)
-            if self._log_file:
-                self._log_file.close()
-                self._log_file = None
-            self.process = None
+        if self.output_thread and self.output_thread.is_alive():
+            self.output_thread.join(timeout=5)
+        if self._log_file:
+            self._log_file.close()
+            self._log_file = None
+        self.process = None
+
+    def is_running(self) -> bool:
+        return self.process is not None and self.process.poll() is None
