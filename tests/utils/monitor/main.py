@@ -134,6 +134,8 @@ def draw(
     # 转换为百分比
     mem_bw_percent = [(ts, (x / max_memory_bw) * 100) for ts, x in mem_bw]
     pcie_bw_percent = [(ts, (x / max_pcie_bw) * 100) for ts, x in pcie_bw]
+    # CPU 由于没有使用超线程，因此认为 50% 就是满载
+    cpu_util = [(ts, min(x * 2, 100)) for ts, x in cpu_util]
 
     # --- 关键修正步骤 1: 找到所有数据系列中最晚的起始时间 ---
     all_series = [cpu_util, mem_bw_percent, pcie_bw_percent, gpu_core_util, gpu_mem_util]
@@ -179,7 +181,6 @@ def draw(
         prompt_ts_strings = []
         decode_ts_strings = []
         with open(llama_server_log_path, "r") as f:
-            # ... (日志读取逻辑保持不变) ...
             for line in f:
                 if "prompt start:" in line:
                     timestamp_str = line.split("prompt start:")[1].strip()

@@ -36,9 +36,9 @@ model_list = {
 versions_list = ["base", "llama_moe"]
 
 test_models = [
-    "Qwen3-30B-A3B-Q8_0",
+    # "Qwen3-30B-A3B-Q8_0",
     # "GLM-4.5-Air-Q8_0",
-    # "Qwen3-235B-A22B-Q8_0",
+    "Qwen3-235B-A22B-Q8_0",
     # "GLM-4.5-Q8_0",
 ]
 test_versions = [
@@ -90,7 +90,7 @@ def run_eval(model: str, model_dir: Path, ctx_size: int, logger: logging.Logger)
     # - gsm8k
     # - mmlu
     datasets = ["gsm8k"]
-    limit = 1
+    limit = 2
     task_config = TaskConfig(
         model=model,
         datasets=datasets,
@@ -177,12 +177,13 @@ def main():
                 run_eval(name, model_dir, ctx_size, logger)
                 # 结束GPU监控并保存数据
                 gpu_recorder.finish(str(model_dir / "gpu_info.npz"))
-
+                time.sleep(1)
+                results = monitor.end(save_path=model_dir / "sys_monitor.csv")
             except Exception as e:
                 logger.exception(f"运行 {name} ({version}) 时出错: {e}")
             finally:
                 wrapper.stop()
-            results = monitor.end(save_path=model_dir / "sys_monitor.csv")
+            
             draw(
                 results,
                 title=f"{name} ({version})",
