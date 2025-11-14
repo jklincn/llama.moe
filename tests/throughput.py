@@ -9,7 +9,6 @@ from pathlib import Path
 from evalscope.config import EvalType, TaskConfig
 from evalscope.run import run_task
 from gguf import GGUFReader
-from utils import gpu_recorder
 from utils.monitor import SysMonitor, draw
 from utils.results_analysis import analysis
 
@@ -39,12 +38,12 @@ versions_list = ["base", "llama_moe"]
 
 test_models = [
     "Qwen3-30B-A3B-Q8_0",
-    "GLM-4.5-Air-Q8_0",
-    "Qwen3-235B-A22B-Q8_0",
+    # "GLM-4.5-Air-Q8_0",
+    # "Qwen3-235B-A22B-Q8_0",
     # "GLM-4.5-Q8_0",
 ]
 test_versions = [
-    "base",
+    # "base",
     "llama_moe",
 ]
 
@@ -121,6 +120,7 @@ def run_eval(model: str, model_dir: Path, ctx_size: int, logger: logging.Logger)
 def clear_page_cache():
     command = "sudo sh -c 'echo 3 > /proc/sys/vm/drop_caches'"
     subprocess.run(command, shell=True, check=True, capture_output=True, text=True)
+    time.sleep(1)
 
 
 def main():
@@ -185,20 +185,18 @@ def main():
                 else:
                     logger.info(f"llama-server 启动成功, PID: {pid}")
 
-                # 开始GPU监控
-                gpu_recorder.start()
                 monitor = SysMonitor(interval=0.1)
                 monitor.start()
+
                 # 运行评估
                 run_eval(name, model_dir, ctx_size, logger)
-                # 结束GPU监控并保存数据
-                gpu_recorder.finish(str(model_dir / "gpu_info.npz"))
-                time.sleep(1)
-                results = monitor.end(save_path=model_dir / "sys_monitor.csv")
+
             except Exception as e:
                 logger.exception(f"运行 {name} ({version}) 时出错: {e}")
             finally:
                 wrapper.stop()
+                time.sleep(1)
+                results = monitor.end(save_path=model_dir / "sys_monitor.csv")
 
             draw(
                 results,

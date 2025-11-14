@@ -1,16 +1,14 @@
 import argparse
+import csv
 import datetime
 import json
 import logging
 import re
 from pathlib import Path
 
-import numpy as np
 from rich import box
 from rich.console import Console
 from rich.table import Table
-
-from .gpu_recorder import load_gpu_info
 
 logger = logging.getLogger("report")
 
@@ -125,24 +123,47 @@ class LogResult:
             )
 
     def _get_gpu_info(self):
-        gpu_info_path = self.version_path / "gpu_info.npz"
-        gpu_utils, mem_utils, mem_used, mem_total = load_gpu_info(gpu_info_path)
+        gpu_info_path = self.version_path / "sys_monitor.csv"
 
-        self.mem_total_bytes = mem_total
+        gpu_utils = []
+        mem_utils = []
+        mem_used = []
+
+        with gpu_info_path.open("r", newline="") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                t = row.get("type")
+                v_str = row.get("value", "").strip()
+                v = float(v_str)
+                if v == 0.0:
+                    continue
+                match t:
+                    case "gpu_core_util":
+                        gpu_utils.append(v)
+                    case "gpu_mem_util":
+                        mem_utils.append(v)
+                    case "gpu_vram_used":
+                        mem_used.append(v)
+                    case "gpu_memory_total_bytes":
+                        self.mem_total_bytes = int(v)
+
+        def _mean(values):
+            return sum(values) / len(values)
+
         self.gpu_util = [
-            int(np.min(gpu_utils)),
-            int(np.max(gpu_utils)),
-            int(np.mean(gpu_utils)),
+            int(min(gpu_utils)),
+            int(max(gpu_utils)),
+            int(_mean(gpu_utils)),
         ]
         self.mem_util = [
-            int(np.min(mem_utils)),
-            int(np.max(mem_utils)),
-            int(np.mean(mem_utils)),
+            int(min(mem_utils)),
+            int(max(mem_utils)),
+            int(_mean(mem_utils)),
         ]
         self.mem_used = [
-            int(np.min(mem_used)),
-            int(np.max(mem_used)),
-            int(np.mean(mem_used)),
+            int(min(mem_used)),
+            int(max(mem_used)),
+            int(_mean(mem_used)),
         ]
 
     def to_row(self) -> dict:
@@ -152,7 +173,7 @@ class LogResult:
         _, gpu_util_max, gpu_util_avg = self.gpu_util
         _, mem_util_max, mem_util_avg = self.mem_util
         _, _, mem_avg = self.mem_used
-        mem_total = self.mem_total_bytes or 1
+        mem_total = self.mem_total_bytes
         # fmt: off
         return {
             "model": self.model,
@@ -160,9 +181,7 @@ class LogResult:
             "tps_prompt": (self.prompt_tokens_total / prompt_s),
             "tps_eval":   (self.eval_tokens_total   / eval_s),
             "gpu_util_avg": gpu_util_avg,
-            "gpu_util_max": gpu_util_max,
             "mem_util_avg": mem_util_avg,
-            "mem_util_max": mem_util_max,
             "mem_avg":  mem_avg / mem_total * 100.0,
             "score": float(self.score),
         }
