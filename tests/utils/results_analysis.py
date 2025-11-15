@@ -229,7 +229,7 @@ def analysis(
     columns = [
         ("version", "Version"),
         ("tps_prompt", "TPS(P)"),
-        ("tps_eval", "TPS(E)"),
+        ("tps_eval", "TPS(D)"),
         ("score", "Score"),
         ("gpu_util", "GPU Util"),
         ("mem_util", "Mem Util"),
