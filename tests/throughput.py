@@ -3,6 +3,7 @@ import logging.config
 import os
 import subprocess
 import time
+import openai
 from datetime import datetime
 from pathlib import Path
 
@@ -15,7 +16,11 @@ from utils.results_analysis import analysis
 from llama_moe import LlamaServerWrapper, get_override_rules
 from llama_moe.core import check_numa
 
-ctx_size = 4096
+os.environ.pop("http_proxy", None)
+os.environ.pop("https_proxy", None)
+os.environ.pop("HTTP_PROXY", None)
+os.environ.pop("HTTPS_PROXY", None)
+
 model_list = {
     "Qwen3-30B-A3B-Q8_0": {
         "path": "/mnt/data/gguf/Qwen3-30B-A3B-Q8_0.gguf",
@@ -33,19 +38,27 @@ model_list = {
         "path": "/mnt/data/gguf/GLM-4.5-Q8_0.gguf",
         "base": ["--n-gpu-layers", "6"],
     },
+    "DeepSeek-R1-Q4_K_M": {
+        "path": "/mnt/data/gguf/DeepSeek-R1-Q4_K_M.gguf",
+        "base": ["--n-gpu-layers", "2"],
+    },
 }
 versions_list = ["base", "llama_moe"]
 
 test_models = [
-    "Qwen3-30B-A3B-Q8_0",
+    # "Qwen3-30B-A3B-Q8_0",
     # "GLM-4.5-Air-Q8_0",
     # "Qwen3-235B-A22B-Q8_0",
     # "GLM-4.5-Q8_0",
+    "DeepSeek-R1-Q4_K_M",
 ]
 test_versions = [
     # "base",
     "llama_moe",
 ]
+
+easy = True
+ctx_size = 600 if easy else 4096
 
 
 def setup_logging(log_file: Path):
@@ -86,12 +99,33 @@ def setup_logging(log_file: Path):
         logging.getLogger(noisy).setLevel(logging.WARNING)
 
 
-def run_eval(model: str, model_dir: Path, ctx_size: int, logger: logging.Logger):
+def run_easy():
+    try:
+        client = openai.OpenAI(base_url="http://localhost:8080", api_key="sk-1234")
+        messages = [
+            {
+                "role": "user",
+                "content": "请详细介绍一下北京这座城市。",
+            },
+        ]
+        completion = client.chat.completions.create(
+            model="local-model",
+            messages=messages,
+            temperature=0.7,
+            max_tokens=512,
+        )
+        response_content = completion.choices[0].message.content
+        print(f"模型回复: {response_content}\n")
+    except Exception as e:
+        print(f"发生错误: {e}")
+
+
+def run_evalscope(model: str, model_dir: Path, ctx_size: int, logger: logging.Logger):
     # datasets
     # - gsm8k
     # - mmlu
     datasets = ["gsm8k"]
-    limit = 2
+    limit = 1
     task_config = TaskConfig(
         model=model,
         datasets=datasets,
@@ -135,7 +169,6 @@ def main():
     setup_logging(log_file=log_file)
     print("日志文件: ", log_file)
     logger = logging.getLogger("throughput")
-
     # fmt: off
     common_args = [
         "--seed", "0",
@@ -189,7 +222,10 @@ def main():
                 monitor.start()
 
                 # 运行评估
-                run_eval(name, model_dir, ctx_size, logger)
+                if easy:
+                    run_easy()
+                else:
+                    run_evalscope(name, model_dir, ctx_size, logger)
 
             except Exception as e:
                 logger.exception(f"运行 {name} ({version}) 时出错: {e}")
@@ -208,7 +244,8 @@ def main():
     logger.info("所有评估完成")
 
     # 生成报告/分析
-    analysis(work_dir, model_order=test_models, version_order=test_versions)
+    if not easy:
+        analysis(work_dir, model_order=test_models, version_order=test_versions)
 
 
 if __name__ == "__main__":
