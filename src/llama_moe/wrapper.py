@@ -14,19 +14,20 @@ class LlamaServerWrapper:
     def __init__(
         self,
         bin_path: str = "llama.cpp/build/bin/llama-server",
-        log_filename: str = "llama-server.log",
+        work_dir: Path = Path.cwd(),
         numactl: Optional[Sequence[str]] = None,
     ):
         if not Path(bin_path).is_file():
             raise FileNotFoundError("找不到 llama-server 可执行文件, 请先进行编译")
         self.bin_path = bin_path
+        self.work_dir = work_dir
         self.numactl: Optional[list[str]] = (
             list(numactl) if numactl is not None else None
         )
         self.process: Optional[subprocess.Popen] = None
         self.output_thread: Optional[threading.Thread] = None
         self._log_file: Optional[object] = None
-        self.log_path = Path.cwd() / log_filename
+        self.log_path = work_dir / "llama-server.log"
 
     def _read_output_continuously(self):
         try:
@@ -74,6 +75,7 @@ class LlamaServerWrapper:
             errors="replace",
             bufsize=1,
             start_new_session=True,
+            env={"WORK_DIR": str(self.work_dir)},
         )
 
         try:

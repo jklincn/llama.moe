@@ -3,10 +3,10 @@ import logging.config
 import os
 import subprocess
 import time
-import openai
 from datetime import datetime
 from pathlib import Path
 
+import openai
 from evalscope.config import EvalType, TaskConfig
 from evalscope.run import run_task
 from gguf import GGUFReader
@@ -22,42 +22,47 @@ os.environ.pop("HTTP_PROXY", None)
 os.environ.pop("HTTPS_PROXY", None)
 
 model_list = {
+    "Qwen1.5-MoE-A2.7B-Q8_0": {
+        "path": "/mnt/data/gguf/Qwen1.5-MoE-A2.7B-Q8_0.gguf",
+        "llama.cpp": ["--n-gpu-layers", "24"],
+    },
     "Qwen3-30B-A3B-Q8_0": {
         "path": "/mnt/data/gguf/Qwen3-30B-A3B-Q8_0.gguf",
-        "base": ["--n-gpu-layers", "35"],
+        "llama.cpp": ["--n-gpu-layers", "35"],
     },
     "GLM-4.5-Air-Q8_0": {
         "path": "/mnt/data/gguf/GLM-4.5-Air-Q8_0.gguf",
-        "base": ["--n-gpu-layers", "10"],
+        "llama.cpp": ["--n-gpu-layers", "10"],
     },
     "Qwen3-235B-A22B-Q8_0": {
         "path": "/mnt/data/gguf/Qwen3-235B-A22B-Q8_0.gguf",
-        "base": ["--n-gpu-layers", "8"],
+        "llama.cpp": ["--n-gpu-layers", "8"],
     },
     "GLM-4.5-Q8_0": {
         "path": "/mnt/data/gguf/GLM-4.5-Q8_0.gguf",
-        "base": ["--n-gpu-layers", "6"],
+        "llama.cpp": ["--n-gpu-layers", "6"],
     },
     "DeepSeek-R1-Q4_K_M": {
         "path": "/mnt/data/gguf/DeepSeek-R1-Q4_K_M.gguf",
-        "base": ["--n-gpu-layers", "2"],
+        "llama.cpp": ["--n-gpu-layers", "2"],
     },
 }
-versions_list = ["base", "llama_moe"]
+versions_list = ["llama.cpp", "llama.moe"]
 
 test_models = [
-    # "Qwen3-30B-A3B-Q8_0",
-    # "GLM-4.5-Air-Q8_0",
-    # "Qwen3-235B-A22B-Q8_0",
-    # "GLM-4.5-Q8_0",
-    "DeepSeek-R1-Q4_K_M",
+    # "Qwen1.5-MoE-A2.7B-Q8_0",
+    "Qwen3-30B-A3B-Q8_0",
+    "GLM-4.5-Air-Q8_0",
+    "Qwen3-235B-A22B-Q8_0",
+    "GLM-4.5-Q8_0",
+    # "DeepSeek-R1-Q4_K_M",
 ]
 test_versions = [
-    # "base",
-    "llama_moe",
+    "llama.cpp",
+    "llama.moe",
 ]
 
-easy = True
+easy = False
 ctx_size = 600 if easy else 4096
 
 
@@ -194,19 +199,17 @@ def main():
             logger.info(f"正在启动 {name} ({version}) ...")
 
             match version:
-                case "base":
-                    final_arg += model["base"]
-                    wrapper = LlamaServerWrapper(
-                        str(bin_path), str(model_dir / "llama-server.log")
-                    )
-                case "llama_moe":
+                case "llama.cpp":
+                    final_arg += model["llama.cpp"]
+                    wrapper = LlamaServerWrapper(str(bin_path), model_dir)
+                case "llama.moe":
                     numactl_cmd, numa_args = check_numa(path)
                     final_arg += (
                         get_override_rules(GGUFReader(path), ctx_size) + numa_args
                     )
                     wrapper = LlamaServerWrapper(
                         str(bin_path),
-                        str(model_dir / "llama-server.log"),
+                        model_dir,
                         numactl=numactl_cmd,
                     )
 

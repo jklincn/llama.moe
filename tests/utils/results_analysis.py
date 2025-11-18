@@ -226,10 +226,11 @@ def analysis(
     console.print()
     console.print("[bold]Benchmark Summary[/bold]\n")
 
+    # 在 TPS 和 Score 之间加入 Speed up 列
     columns = [
         ("version", "Version"),
-        ("tps_prompt", "TPS(P)"),
-        ("tps_eval", "TPS(D)"),
+        ("tps_eval", "TPS"),
+        ("speedup", "Speed up"),  # 新增列
         ("score", "Score"),
         ("gpu_util", "GPU Util"),
         ("mem_util", "Mem Util"),
@@ -268,13 +269,24 @@ def analysis(
             version_map = {r["version"]: r for r in model_rows}
             model_rows = [version_map[v] for v in ordered_versions]
 
+        # 找到当前 model 下 llama.cpp 的 TPS 作为基准
+        baseline_tps = None
+        for r in model_rows:
+            if r["version"] == "llama.cpp":
+                baseline_tps = r["tps_eval"]
+                break
+
         for r in model_rows:
             row_cells: list[str] = []
             for key, _ in columns:
-                if key == "tps_prompt":
-                    row_cells.append(fmt_float(r["tps_prompt"], 1))
-                elif key == "tps_eval":
+                if key == "tps_eval":
                     row_cells.append(fmt_float(r["tps_eval"], 1))
+                elif key == "speedup":
+                    if r["version"] == "llama.cpp" or not baseline_tps or baseline_tps == 0:
+                        row_cells.append("1.0x")
+                    else:
+                        ratio = r["tps_eval"] / baseline_tps
+                        row_cells.append(f"{fmt_float(ratio, 1)}x")
                 elif key == "score":
                     row_cells.append(fmt_float(r["score"], 2))
                 elif key == "gpu_util":
@@ -309,5 +321,5 @@ if __name__ == "__main__":
         "Qwen3-235B-A22B-Q8_0",
         "GLM-4.5-Q8_0",
     ]
-    test_versions = ["base", "llama_moe"]
+    test_versions = ["llama.cpp", "llama.moe"]
     analysis(Path(args.results_path), test_models, test_versions)

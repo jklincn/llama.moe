@@ -1,3 +1,4 @@
+import argparse
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -5,9 +6,11 @@ from pathlib import Path
 
 
 def heatmap(
-    csv_path: str = "expert_activations.csv",
-    out_path: str = "expert_activation_heatmap.png",
+    csv_path: str,
+    out_name: str = "expert_activation_heatmap.png",
 ) -> None:
+    csv_path = Path(csv_path)
+    out_path = csv_path.parent / out_name
     # ---------- 读取数据 ----------
     df = pd.read_csv(csv_path)
 
@@ -53,7 +56,7 @@ def heatmap(
 
     # ---------- 保存并预览 ----------
     plt.savefig(out_path, dpi=300)
-    print(f"[✓] 已保存热图 → {Path(out_path).resolve()}")
+    print(f"[✓] 已保存热图 → {out_path.resolve()}")
 
 
 def build_k_list(num_experts: int, step: int = 4) -> list[int]:
@@ -65,10 +68,12 @@ def build_k_list(num_experts: int, step: int = 4) -> list[int]:
 
 
 def topk_proportions(
-    csv_path: str = "expert_activations.csv",
-    out_path: str = "expert_proportions.csv",
+    csv_path: str,
+    out_name: str = "expert_proportions.csv",
     step: int = 4,
 ) -> None:
+    csv_path = Path(csv_path)
+    out_path = csv_path.parent / out_name
     # ---------- 读取 CSV ----------
     df = pd.read_csv(csv_path)
     layer_col = df.columns[0]  # 第一列：层号
@@ -110,9 +115,22 @@ def topk_proportions(
     # ---------- 输出 ----------
     out_df = pd.DataFrame(result)
     out_df.to_csv(out_path, index=False)
-    print(f"[✓] 已保存结果 → {Path(out_path).resolve()}")
+    print(f"[✓] 已保存结果 → {out_path.resolve()}")
+
 
 
 if __name__ == "__main__":
-    topk_proportions()
-    heatmap()
+    parser = argparse.ArgumentParser(description="MoE Expert Activation Analysis")
+
+    parser.add_argument(
+        "csv_path",
+        type=str,
+        help="Path to expert_activations.csv",
+    )
+
+    args = parser.parse_args()
+
+    csv_path = args.csv_path
+
+    topk_proportions(csv_path)
+    heatmap(csv_path)
