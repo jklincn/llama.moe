@@ -282,11 +282,15 @@ def analysis(
                 if key == "tps_eval":
                     row_cells.append(fmt_float(r["tps_eval"], 1))
                 elif key == "speedup":
-                    if r["version"] == "llama.cpp" or not baseline_tps or baseline_tps == 0:
-                        row_cells.append("1.0x")
+                    if (
+                        r["version"] == "llama.cpp"
+                        or not baseline_tps
+                        or baseline_tps == 0
+                    ):
+                        row_cells.append("1.00x")
                     else:
                         ratio = r["tps_eval"] / baseline_tps
-                        row_cells.append(f"{fmt_float(ratio, 1)}x")
+                        row_cells.append(f"{fmt_float(ratio, 2)}x")
                 elif key == "score":
                     row_cells.append(fmt_float(r["score"], 2))
                 elif key == "gpu_util":
@@ -297,7 +301,9 @@ def analysis(
                     row_cells.append(f"{r['mem_avg']:.1f}%")
                 else:
                     row_cells.append(str(r[key]))
-            table.add_row(*row_cells)
+
+            style = "bold" if r["version"] == "llama.moe" else None
+            table.add_row(*row_cells, style=style)
 
         console.print(table)
         console.print()
