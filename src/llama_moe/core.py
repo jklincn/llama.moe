@@ -79,7 +79,7 @@ def run(args, other):
 
     current_model = model
     pruning_done = False
-    threshold = 2000
+    threshold = args.prune_threshold
     while True:
         final_args = (
             ["--model", current_model]
@@ -126,8 +126,13 @@ def run(args, other):
                     csv_path = "expert_activations.csv"
                     if os.path.exists(csv_path):
                         try:
-                            # 保留前 96 个专家 (示例值，实际可配置)
-                            new_model_path = prune_model_with_report(current_model, csv_path, keep_n=96)
+                            # 使用 coverage 模式进行剪枝
+                            new_model_path = prune_model_with_report(
+                                current_model, 
+                                csv_path, 
+                                method='coverage', 
+                                threshold=args.prune_coverage
+                            )
                             current_model = new_model_path
                             pruning_done = True
                             logger.info(f"剪枝完成，新模型路径: {current_model}")

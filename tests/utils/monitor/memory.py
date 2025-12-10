@@ -26,6 +26,12 @@ class MemoryMonitor:
         self.data: List[Tuple[datetime, float]] = []
 
     def start(self):
+        if self.csv_path.exists():
+            try:
+                self.csv_path.unlink()
+            except OSError:
+                pass
+
         cmd = []
         if self.use_sudo:
             cmd.append("sudo")

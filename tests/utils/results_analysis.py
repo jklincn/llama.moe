@@ -292,7 +292,7 @@ def analysis(
                         ratio = r["tps_eval"] / baseline_tps
                         row_cells.append(f"{fmt_float(ratio, 2)}x")
                 elif key == "score":
-                    row_cells.append(fmt_float(r["score"], 2))
+                    row_cells.append(fmt_float(r["score"] * 100, 1))
                 elif key == "gpu_util":
                     row_cells.append(f"{r['gpu_util_avg']}%")
                 elif key == "mem_util":

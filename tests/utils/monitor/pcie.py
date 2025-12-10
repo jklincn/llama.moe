@@ -30,6 +30,12 @@ class PCIeMonitor:
         self.data: List[Tuple[datetime, float]] = []
 
     def start(self):
+        if self.csv_path.exists():
+            try:
+                self.csv_path.unlink()
+            except OSError:
+                pass
+
         cmd = []
         if self.use_sudo:
             cmd.append("sudo")
@@ -82,7 +88,8 @@ class PCIeMonitor:
                     
                     pcie_rd = float(row[-2])
                     pcie_wr = float(row[-1])
-                    data.append((ts, max(pcie_rd, pcie_wr) / 1e9 / self.interval))
+                    # pcm-pcie -B outputs Bytes/sec, so we just convert to GB/s
+                    data.append((ts, max(pcie_rd, pcie_wr) / 1e9))
                 except (ValueError, IndexError):
                     continue
         except csv.Error:

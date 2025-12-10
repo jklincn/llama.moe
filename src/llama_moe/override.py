@@ -130,6 +130,17 @@ def get_override_rules(
     tensors = {t.name.lower(): t.n_bytes for t in reader.tensors}
     cpu_rules = []
 
+    # Special handling for GLM-4.5-Air: layer 46 (nextn) is not supported by llama-server yet
+    model_name_field = reader.get_field(Keys.General.NAME)
+    if model_name_field and str(model_name_field.contents()) == "Glm-4.5-Air":
+        logger.debug("Detected GLM-4.5-Air, forcing layer 46 to CPU")
+        cpu_rules.append("blk\\.46\\..*=CPU")
+        tensors = {
+            name: size
+            for name, size in tensors.items()
+            if not name.startswith("blk.46.")
+        }
+
     # output/gate/norm
     for keyword in ["output.weight", "gate_inp", "norm"]:
         matched_tensors = {

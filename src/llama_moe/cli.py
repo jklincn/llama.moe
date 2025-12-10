@@ -29,7 +29,10 @@ def build_parser():
     parser.add_argument("--ctx-size", "-c", dest="ctx_size", type=int, default=4096)
     parser.add_argument("--model", "-m", dest="model", type=lambda s: str(Path(s).expanduser()), default=None)
     parser.add_argument("--no-kv-offload", "-nkvo", dest="no_kv_offload", action="store_true")
-    # discard the following parameters
+    # llama_moe pruning parameters
+    parser.add_argument("--prune-threshold", "-pt", dest="prune_threshold", type=int, default=sys.maxsize, help="Token threshold for pruning")
+    parser.add_argument("--prune-coverage", "-pc", dest="prune_coverage", type=float, default=90.0, help="Coverage percentage for pruning (0-100)")
+    # discard the following parameters, llama_moe will add them automatically
     parser.add_argument("--n-gpu-layers", "--gpu-layers", "-ngl", dest="n-gpu-layers", type=str, default=None)
     parser.add_argument("--override-tensor", "-ot", dest="override-tensor", type=str, default=None)
     parser.add_argument("--cpu-moe", "-cmoe", dest="cpu-moe", type=str, default=None)

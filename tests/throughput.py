@@ -35,7 +35,7 @@ model_list = {
         "llama.cpp": ["--n-gpu-layers", "10"],
     },
     "GLM-4.5-Air-Q8_0-prune": {
-        "path": "/mnt/data/gguf/GLM-4.5-Air-Q8_0.gguf.smart_pruned_96",
+        "path": "/mnt/data/gguf/GLM-4.5-Air-Q8_0-pruned_cov90.gguf",
         "llama.cpp": ["--n-gpu-layers", "10"],
     },
     "Qwen3-235B-A22B-Q8_0": {
@@ -135,7 +135,7 @@ def run_evalscope(model: str, model_dir: Path, ctx_size: int, logger: logging.Lo
     # - gsm8k
     # - mmlu
     datasets = ["gsm8k"]
-    limit = 300
+    limit = 1
     task_config = TaskConfig(
         model=model,
         datasets=datasets,
