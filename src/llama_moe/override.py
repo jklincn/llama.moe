@@ -130,8 +130,8 @@ def get_override_rules(
     tensors = {t.name.lower(): t.n_bytes for t in reader.tensors}
     cpu_rules = []
 
-    # output/gate/norm/nextn(GLM-4.5)
-    for keyword in ["output.weight", "gate_inp", "norm", "nextn"]:
+    # output/gate/norm
+    for keyword in ["output.weight", "gate_inp", "norm"]:
         matched_tensors = {
             name: size for name, size in tensors.items() if keyword in name
         }
