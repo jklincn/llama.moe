@@ -1,11 +1,16 @@
+import threading
 import time
 from gguf import GGUFReader
 import logging
+
+from llama_moe.tracker import MetricsTracker
 from .override import get_override_rules
 from .wrapper import LlamaServerWrapper
+from .pruner import prune_model_with_report
 import os
 
 logger = logging.getLogger("main")
+
 
 # sudo sh -c 'echo 3 > /proc/sys/vm/drop_caches'
 def drop_file_cache(path: str):
@@ -15,6 +20,7 @@ def drop_file_cache(path: str):
         os.posix_fadvise(fd, 0, size, os.POSIX_FADV_DONTNEED)
     finally:
         os.close(fd)
+
 
 def check_numa(model) -> None | tuple[list[str], list[str]]:
     path = "/sys/devices/system/node/has_cpu"
@@ -64,29 +70,88 @@ def run(args, other):
     ot_args = get_override_rules(reader, ctx_size, kv_offload)
 
     numa_result = check_numa(model)
-    if numa_result is None:
-        numactl_cmd = None
-        numa_args = []
-    else:
-        numactl_cmd, numa_args = numa_result
+    numactl_cmd, numa_args = numa_result if numa_result else (None, [])
 
-    final_args = (
-        ["--model", model] + ["--ctx-size", str(ctx_size)] + ot_args + other + numa_args
-    )
-    wrapper = LlamaServerWrapper(numactl=numactl_cmd)
-    try:
-        logger.info("正在启动 llama-server...")
-        pid = wrapper.start(final_args, timeout=3600)
-        if pid < 0:
-            logger.error("llama-server 启动失败")
-            raise RuntimeError("llama-server 启动失败")
-        logger.info("启动成功, 开始监听 http://127.0.0.1:8080 (key: sk-1234)")
-        while wrapper.is_running():
-            time.sleep(10)
-    except KeyboardInterrupt:
-        logger.info("正在关闭...")
-    finally:
+    if "--metrics" not in other:
+        other.append("--metrics")
+    if os.getenv("LLAMA_MOE_DEBUG") == "1":
+        other.append("-v")
+
+    current_model = model
+    pruning_done = False
+    threshold = 2000
+    while True:
+        final_args = (
+            ["--model", current_model]
+            + ["--ctx-size", str(ctx_size)]
+            + ot_args
+            + other
+            + numa_args
+        )
+        wrapper = LlamaServerWrapper(numactl=numactl_cmd)
+        tracker = None
         try:
-            wrapper.stop()
-        except Exception:
-            logger.exception("停止子进程时出错")
+            logger.info("正在启动 llama-server...")
+
+            pid = wrapper.start(final_args, timeout=3600)
+            if pid < 0:
+                logger.error("llama-server 启动失败")
+                raise RuntimeError("llama-server 启动失败")
+
+            logger.info("启动成功, 开始监听 http://127.0.0.1:8080 (key: sk-1234)")
+            if not pruning_done:
+                stop_event = threading.Event()
+
+                def on_threshold(tokens):
+                    logger.info(f"触发剪枝阈值 ({tokens} tokens). 正在停止服务器...")
+                    stop_event.set()
+
+                tracker = MetricsTracker(
+                    threshold=threshold, on_threshold_reached=on_threshold
+                )
+                tracker.start()
+
+                # 主循环等待
+                while wrapper.is_running() and not stop_event.is_set():
+                    time.sleep(1)
+
+                if stop_event.is_set():
+                    # 阈值触发，停止服务器
+                    wrapper.stop()
+                    tracker.stop()
+                    time.sleep(3)  # 等待激活文件保存
+                    # 执行剪枝
+                    logger.info("开始执行剪枝...")
+                    # 假设 expert_activations.csv 在当前目录
+                    csv_path = "expert_activations.csv"
+                    if os.path.exists(csv_path):
+                        try:
+                            # 保留前 96 个专家 (示例值，实际可配置)
+                            new_model_path = prune_model_with_report(current_model, csv_path, keep_n=96)
+                            current_model = new_model_path
+                            pruning_done = True
+                            logger.info(f"剪枝完成，新模型路径: {current_model}")
+                        except Exception as e:
+                            logger.error(f"剪枝失败: {e}")
+                            break
+                    else:
+                        logger.error("未找到激活报告，无法剪枝")
+                        break
+
+                    continue  # 重启循环，使用新模型
+            else:
+                # 剪枝已完成，普通运行模式
+                while wrapper.is_running():
+                    time.sleep(10)
+
+            break  # 正常退出循环
+        except KeyboardInterrupt:
+            logger.info("正在关闭...")
+            break
+        finally:
+            if tracker:
+                tracker.stop()
+            try:
+                wrapper.stop()
+            except Exception:
+                logger.exception("停止子进程时出错")

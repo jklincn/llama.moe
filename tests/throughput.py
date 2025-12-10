@@ -34,6 +34,10 @@ model_list = {
         "path": "/mnt/data/gguf/GLM-4.5-Air-Q8_0.gguf",
         "llama.cpp": ["--n-gpu-layers", "10"],
     },
+    "GLM-4.5-Air-Q8_0-prune": {
+        "path": "/mnt/data/gguf/GLM-4.5-Air-Q8_0.gguf.smart_pruned_96",
+        "llama.cpp": ["--n-gpu-layers", "10"],
+    },
     "Qwen3-235B-A22B-Q8_0": {
         "path": "/mnt/data/gguf/Qwen3-235B-A22B-Q8_0.gguf",
         "llama.cpp": ["--n-gpu-layers", "8"],
@@ -51,14 +55,15 @@ versions_list = ["llama.cpp", "llama.moe"]
 
 test_models = [
     # "Qwen1.5-MoE-A2.7B-Q8_0",
-    "Qwen3-30B-A3B-Q8_0",
+    # "Qwen3-30B-A3B-Q8_0",
     "GLM-4.5-Air-Q8_0",
-    "Qwen3-235B-A22B-Q8_0",
-    "GLM-4.5-Q8_0",
+    "GLM-4.5-Air-Q8_0-prune",
+    # "Qwen3-235B-A22B-Q8_0",
+    # "GLM-4.5-Q8_0",
     # "DeepSeek-R1-Q4_K_M",
 ]
 test_versions = [
-    "llama.cpp",
+    # "llama.cpp",
     "llama.moe",
 ]
 
@@ -130,7 +135,7 @@ def run_evalscope(model: str, model_dir: Path, ctx_size: int, logger: logging.Lo
     # - gsm8k
     # - mmlu
     datasets = ["gsm8k"]
-    limit = 1
+    limit = 300
     task_config = TaskConfig(
         model=model,
         datasets=datasets,
@@ -180,6 +185,7 @@ def main():
         "--api-key", "sk-1234",
         "--log-verbosity", "0",
         "--ctx-size", str(ctx_size),
+        "--metrics",
     ]
     # fmt: on
 

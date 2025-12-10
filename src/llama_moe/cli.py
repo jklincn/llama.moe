@@ -19,6 +19,8 @@ def setup_logging():
     else:
         root.setLevel(logging.INFO)
     root.addHandler(handler)
+    for noisy in ["urllib3"]:
+        logging.getLogger(noisy).setLevel(logging.WARNING)
 
 
 def build_parser():
@@ -35,6 +37,7 @@ def build_parser():
     parser.add_argument("--cache-type-k", "-ctk", dest="cache-type-k", type=str, default=None)
     parser.add_argument("--cache-type-v", "-ctv", dest="cache-type-v", type=str, default=None)
     parser.add_argument("--numa", dest="numa", type=str, default=None)
+    parser.add_argument("--metrics", dest="metrics", action="store_true")
     # fmt: on
     return parser
 
