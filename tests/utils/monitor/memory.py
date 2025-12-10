@@ -3,6 +3,7 @@ import os
 import signal
 import subprocess
 import time
+import io
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional, Tuple
@@ -51,16 +52,54 @@ class MemoryMonitor:
     def _parse_csv(self) -> List[Tuple[datetime, float]]:
         data: List[Tuple[datetime, float]] = []
 
-        with self.csv_path.open("r", newline="") as f:
-            reader = csv.reader(f)
-            _ = next(reader)  # 跳过第一行
-            header = next(reader)  # 字段名
-            for row in reader:
-                dt_str = f"{row[0].strip()} {row[1].strip()}"
-                mem_str = row[len(header) - 1].strip()
-                ts = datetime.strptime(dt_str, "%Y-%m-%d %H:%M:%S.%f")
-                mem_val = float(mem_str)
-                data.append((ts, mem_val))
+        if not self.csv_path.exists():
+            return data
+
+        # 读取文件内容并清洗 NUL 字节，防止 pcm 异常退出导致文件末尾包含大量 NUL
+        try:
+            with self.csv_path.open("r", encoding="utf-8", errors="replace") as f:
+                content = f.read()
+        except Exception:
+            return data
+
+        content = content.replace('\x00', '')
+        
+        f_obj = io.StringIO(content)
+        reader = csv.reader(f_obj)
+
+        try:
+            iterator = iter(reader)
+            try:
+                _ = next(iterator)  # 跳过第一行
+                header = next(iterator)  # 字段名
+            except StopIteration:
+                return data
+
+            for row in iterator:
+                if not row:
+                    continue
+                
+                try:
+                    # 简单的完整性检查
+                    if len(row) < 2: 
+                        continue
+
+                    dt_str = f"{row[0].strip()} {row[1].strip()}"
+                    
+                    # 原始逻辑：取最后一列作为 Memory Bandwidth
+                    target_idx = len(header) - 1
+                    if target_idx >= len(row):
+                        continue
+                    
+                    mem_str = row[target_idx].strip()
+                    
+                    ts = datetime.strptime(dt_str, "%Y-%m-%d %H:%M:%S.%f")
+                    mem_val = float(mem_str)
+                    data.append((ts, mem_val))
+                except (ValueError, IndexError):
+                    continue
+        except csv.Error:
+            pass
 
         return data
 

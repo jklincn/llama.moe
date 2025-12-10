@@ -3,6 +3,7 @@ import os
 import signal
 import subprocess
 import time
+import io
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional, Tuple
@@ -51,16 +52,41 @@ class PCIeMonitor:
     def _parse_csv(self) -> List[Tuple[datetime, float]]:
         data: List[Tuple[datetime, float]] = []
 
-        with self.csv_path.open("r", newline="") as f:
-            reader = csv.reader(f)
+        if not self.csv_path.exists():
+            return data
+
+        try:
+            with self.csv_path.open("r", encoding="utf-8", errors="replace") as f:
+                content = f.read()
+        except Exception:
+            return data
+
+        content = content.replace('\x00', '')
+        f_obj = io.StringIO(content)
+        reader = csv.reader(f_obj)
+
+        try:
             for row in reader:
-                if row[0].strip() == "Date":
+                if not row:
                     continue
-                dt_str = f"{row[0].strip()} {row[1].strip()}"
-                ts = datetime.strptime(dt_str, "%Y-%m-%d %H:%M:%S.%f")
-                pcie_rd = float(row[-2])
-                pcie_wr = float(row[-1])
-                data.append((ts, max(pcie_rd, pcie_wr) / 1e9 / self.interval))
+                try:
+                    if row[0].strip() == "Date":
+                        continue
+                    
+                    # 确保行有足够的数据
+                    if len(row) < 2:
+                        continue
+
+                    dt_str = f"{row[0].strip()} {row[1].strip()}"
+                    ts = datetime.strptime(dt_str, "%Y-%m-%d %H:%M:%S.%f")
+                    
+                    pcie_rd = float(row[-2])
+                    pcie_wr = float(row[-1])
+                    data.append((ts, max(pcie_rd, pcie_wr) / 1e9 / self.interval))
+                except (ValueError, IndexError):
+                    continue
+        except csv.Error:
+            pass
 
         return data
 
