@@ -1,15 +1,17 @@
 import argparse
 import csv
+from pathlib import Path
 import numpy as np
-import os
 from typing import Dict, List
 from gguf import GGUFReader, GGUFWriter, GGUFValueType, Keys
 
 from .utils.gguf import detect_arch
 
 
-def load_expert_importance(csv_path: str, keep_n: int) -> Dict[int, List[int]]:
+def load_expert_importance(csv_path: str, method: str, threshold: float, total_experts: int = None) -> Dict[int, List[int]]:
     """
+    method: 'count' (keep top N) or 'coverage' (keep top experts summing to threshold %)
+    threshold: N (int) or percentage (0.0-100.0)
     返回: {layer_idx: [expert_idx_1, expert_idx_2, ...]} 
     列表中的顺序即为新的物理顺序（按重要性从高到低）
     """
@@ -27,14 +29,43 @@ def load_expert_importance(csv_path: str, keep_n: int) -> Dict[int, List[int]]:
                     exp_id = int(k.split('_')[1])
                     counts.append((exp_id, int(v)))
             
+            # 如果指定了总专家数，检查 CSV 中的专家数量是否匹配
+            if total_experts is not None and len(counts) != total_experts:
+                print(f"Error: Layer {layer_idx} in CSV has {len(counts)} experts, but model has {total_experts}.")
+                exit(1)
+
             # 按激活次数降序排序
             counts.sort(key=lambda x: x[1], reverse=True)
             
-            # 选取前 N 个专家的索引
-            keep_indices = [x[0] for x in counts[:keep_n]]
+            total_activations = sum(x[1] for x in counts)
+            
+            keep_indices = []
+            if method == 'count':
+                keep_n = int(threshold)
+                keep_indices = [x[0] for x in counts[:keep_n]]
+            elif method == 'coverage':
+                target_coverage = threshold
+                current_coverage = 0.0
+                current_sum = 0
+                
+                if total_activations == 0:
+                    # 如果没有激活数据，保留所有专家以防万一
+                    keep_indices = [x[0] for x in counts]
+                else:
+                    for exp_id, count in counts:
+                        keep_indices.append(exp_id)
+                        current_sum += count
+                        current_coverage = (current_sum / total_activations) * 100
+                        if current_coverage >= target_coverage:
+                            break
+            
+            # 计算最终覆盖率
+            kept_activations = sum(dict(counts)[idx] for idx in keep_indices)
+            coverage = (kept_activations / total_activations * 100) if total_activations > 0 else 0.0
+
             layer_importance[layer_idx] = keep_indices
             
-            print(f"  Layer {layer_idx}: keeping experts {keep_indices}")
+            print(f"  Layer {layer_idx}: keeping {len(keep_indices)}/{len(counts)} experts. Coverage: {coverage:.2f}% (Total: {total_activations}, Kept: {kept_activations})")
             
     return layer_importance
 
@@ -83,13 +114,17 @@ def reorder_and_prune_data(data: np.ndarray, indices: List[int], old_count: int,
     return data
 
 
-def copy_all_metadata(reader: GGUFReader, writer: GGUFWriter, new_expert_count: int = None) -> None:
+def process_metadata(reader: GGUFReader, writer: GGUFWriter, new_expert_count: int = None) -> None:
     # 基本与 gguf_new_metadata.py 的 copy 逻辑一致：跳过 GGUF.* 与 ARCHITECTURE 虚拟键
     arch = detect_arch(reader)
+    
+    # Add pruning flag
+    writer.add_bool("llama_moe.is_pruned", True)
+    
     for field in reader.fields.values():
         if field.name == Keys.General.ARCHITECTURE or field.name.startswith("GGUF."):
             continue
-        
+
         val = field.contents()
         val_type = field.types[0] if field.types else None
         sub_type = field.types[-1] if field.types and field.types[0] == GGUFValueType.ARRAY else None
@@ -110,7 +145,15 @@ def copy_all_metadata(reader: GGUFReader, writer: GGUFWriter, new_expert_count: 
             raise ValueError(f"无法处理的字段类型: {field.name}")
 
 
-def copy_tensors(reader: GGUFReader, writer: GGUFWriter, old_expert_count: int, new_expert_count: int, importance_map: Dict[int, List[int]] = None):
+def process_tensors(reader: GGUFReader, writer: GGUFWriter, old_expert_count: int, importance_map: Dict[int, List[int]] = None):
+    arch = detect_arch(reader)
+    leading_dense_blocks = 0
+    if arch == "glm4moe":
+        key = f"{arch}.leading_dense_block_count"
+        if key in reader.fields:
+            leading_dense_blocks = int(reader.fields[key].parts[-1][0])
+            print(f"Detected {arch} with {leading_dense_blocks} leading dense blocks.")
+
     for tensor in reader.tensors:
         data = tensor.data
         shape = list(tensor.shape)
@@ -120,30 +163,33 @@ def copy_tensors(reader: GGUFReader, writer: GGUFWriter, old_expert_count: int, 
         is_expert_tensor = "exps" in name or "ffn_gate_inp" in name or "exp_probs" in name
         layer_idx = get_layer_idx_from_name(name)
         
+        # Special handling for GLM4MoE dense layers
+        skip_pruning = False
+        if arch == "glm4moe" and layer_idx != -1 and layer_idx < leading_dense_blocks:
+             skip_pruning = True
+        
         # 只有当我们在元数据中找到了专家数量，并且当前张量维度中包含该数量时，才尝试裁剪
         target_dim_idx = -1
-        if is_expert_tensor and old_expert_count in shape:
+        if not skip_pruning and is_expert_tensor and old_expert_count in shape:
             target_dim_idx = shape.index(old_expert_count)
         
         # 决定保留哪些索引
         keep_indices = None
         if importance_map and layer_idx in importance_map:
             keep_indices = importance_map[layer_idx]
-        elif new_expert_count < old_expert_count:
-            # 默认保留前 N 个
-            keep_indices = list(range(new_expert_count))
 
         if keep_indices and target_dim_idx != -1:
-            print(f"  - [Pruning] {name} | {tensor_type.name} | {shape} -> Keeping {len(keep_indices)} experts (Reordered)")
+            old_shape = [int(x) for x in shape]
             
             # 更新逻辑形状
             shape[target_dim_idx] = len(keep_indices)
+            new_shape = [int(x) for x in shape]
+            
+            print(f"[Pruning] {name:<32} | {tensor_type.name:<4} | {old_shape} -> {new_shape}")
             
             is_quant = (tensor.data.dtype == np.uint8)
             # 直接调用裁剪函数，它会自动处理维度匹配
             data = reorder_and_prune_data(data, keep_indices, old_expert_count, is_quant)
-        else:
-            print(f"  - {name} | {tensor_type.name} | {shape}")
 
         # 写入数据
         if tensor.data.dtype == np.uint8:
@@ -154,7 +200,7 @@ def copy_tensors(reader: GGUFReader, writer: GGUFWriter, old_expert_count: int, 
             writer.add_tensor(name, data)
 
 
-def prune_model_with_report(gguf_path: str, report_path: str, keep_n: int) -> str:
+def prune_model_with_report(gguf_path: str, report_path: str, method: str, threshold: float) -> str:
     print(f"Loading {gguf_path}...")
     reader = GGUFReader(gguf_path)
     arch = detect_arch(reader)
@@ -163,18 +209,25 @@ def prune_model_with_report(gguf_path: str, report_path: str, keep_n: int) -> st
     old_expert_count = int(expert_count_field.parts[-1][0]) if expert_count_field else 0
     print(f"Detected architecture: {arch}, Expert Count: {old_expert_count}")
 
-    importance_map = load_expert_importance(report_path, keep_n)
-    output_path = gguf_path + f".smart_pruned_{keep_n}"
+    importance_map = load_expert_importance(report_path, method, threshold, old_expert_count)
     
-    print(f"Output path: {output_path}")
+    # Determine max experts kept to update metadata (though layers may vary)
+    max_kept_experts = 0
+    if importance_map:
+        max_kept_experts = max(len(indices) for indices in importance_map.values())
+    
+    p = Path(gguf_path)
+    suffix_val = int(threshold) if method == 'count' else f"cov{int(threshold)}"
+    output_path = str(p.with_name(f"{p.stem}-pruned_{suffix_val}{p.suffix}"))
+    
     
     writer = GGUFWriter(output_path, arch)
 
-    print("Copying metadata...")
-    copy_all_metadata(reader, writer, keep_n)
+    print("Processing metadata...")
+    process_metadata(reader, writer, max_kept_experts)
 
-    print("Copying tensors...")
-    copy_tensors(reader, writer, old_expert_count, keep_n, importance_map)
+    print("Processing tensors...")
+    process_tensors(reader, writer, old_expert_count, importance_map)
 
     print("Writing file...")
     writer.write_header_to_file()
@@ -182,18 +235,25 @@ def prune_model_with_report(gguf_path: str, report_path: str, keep_n: int) -> st
     writer.write_tensors_to_file()
     writer.close()
     print("Done.")
+    print(f"Output path: {output_path}")
     return output_path
 
-
+# python -m llama_moe.pruner /mnt/data/gguf/GLM-4.5-Air-Q8_0.gguf --prune-experts 96 --activation-report expert_activations.csv
+# python -m llama_moe.pruner /mnt/data/gguf/GLM-4.5-Air-Q8_0.gguf --prune-coverage 90 --activation-report expert_activations.csv
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(description="GGUF MoE 裁剪脚本")
     ap.add_argument("gguf_path", help="GGUF 文件路径")
-    ap.add_argument("--prune-experts", type=int, default=None, help="保留前 N 个专家")
+    ap.add_argument("--prune-experts", type=int, default=None, help="保留前 N 个专家 (按数量)")
+    ap.add_argument("--prune-coverage", type=float, default=None, help="保留专家直到达到覆盖率 (0-100)")
     ap.add_argument("--activation-report", type=str, default=None, help="expert_activations.csv 路径")
     args = ap.parse_args()
 
-    if args.prune_experts and args.activation_report:
-        prune_model_with_report(args.gguf_path, args.activation_report, args.prune_experts)
+    if args.activation_report:
+        if args.prune_experts is not None:
+            prune_model_with_report(args.gguf_path, args.activation_report, 'count', args.prune_experts)
+        elif args.prune_coverage is not None:
+            prune_model_with_report(args.gguf_path, args.activation_report, 'coverage', args.prune_coverage)
+        else:
+             print("Please provide --prune-experts OR --prune-coverage along with --activation-report.")
     else:
-        # 简单的复制或截断逻辑，为了兼容旧用法，这里可以保留之前的逻辑，或者简化
-        print("Please provide --prune-experts and --activation-report for smart pruning.")
+        print("Please provide --activation-report for smart pruning.")
