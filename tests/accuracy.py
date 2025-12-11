@@ -23,7 +23,7 @@ os.environ.pop("HTTPS_PROXY", None)
 model_list = {
     "Qwen3-30B-A3B-Q8_0": {
         "unchanged": "/mnt/data/gguf/Qwen3-30B-A3B-Q8_0.gguf",
-        "cov85": "",
+        "cov85": "/mnt/data/gguf/Qwen3-30B-A3B-Q8_0-pruned_cov85.gguf",
         "cov90": "/mnt/data/gguf/Qwen3-30B-A3B-Q8_0-pruned_cov90.gguf",
         "cov91": "/mnt/data/gguf/Qwen3-30B-A3B-Q8_0-pruned_cov91.gguf",
         "cov92": "/mnt/data/gguf/Qwen3-30B-A3B-Q8_0-pruned_cov92.gguf",
