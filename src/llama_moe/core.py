@@ -99,7 +99,7 @@ def run(args, other):
                 raise RuntimeError("llama-server 启动失败")
 
             logger.info("启动成功, 开始监听 http://127.0.0.1:8080 (key: sk-1234)")
-            if not pruning_done:
+            if not pruning_done and threshold > 0:
                 stop_event = threading.Event()
 
                 def on_threshold(tokens):
