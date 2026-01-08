@@ -201,6 +201,7 @@ def analysis(
     results_path: Path,
     model_order: list[str] | None = None,
     version_order: list[str] | None = None,
+    base_str: str = "llama.cpp",
 ) -> None:
     results: list[LogResult] = []
 
@@ -269,10 +270,10 @@ def analysis(
             version_map = {r["version"]: r for r in model_rows}
             model_rows = [version_map[v] for v in ordered_versions]
 
-        # 找到当前 model 下 llama.cpp 的 TPS 作为基准
+        # 找到当前 TPS 基准
         baseline_tps = None
         for r in model_rows:
-            if r["version"] == "llama.cpp":
+            if r["version"] == base_str:
                 baseline_tps = r["tps_eval"]
                 break
 
@@ -283,7 +284,7 @@ def analysis(
                     row_cells.append(fmt_float(r["tps_eval"], 1))
                 elif key == "speedup":
                     if (
-                        r["version"] == "llama.cpp"
+                        r["version"] == base_str
                         or not baseline_tps
                         or baseline_tps == 0
                     ):
@@ -328,4 +329,15 @@ if __name__ == "__main__":
         "GLM-4.5-Q8_0",
     ]
     test_versions = ["llama.cpp", "llama.moe"]
-    analysis(Path(args.results_path), test_models, test_versions)
+    test_versions = [
+        "unchanged",
+        "cov95",
+        "cov94",
+        "cov93",
+        "cov92",
+        "cov91",
+        "cov90",
+        "cov85",
+    ]
+    base_str = "unchanged"
+    analysis(Path(args.results_path), test_models, test_versions, base_str)

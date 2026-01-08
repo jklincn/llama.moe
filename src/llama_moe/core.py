@@ -113,7 +113,7 @@ def run(args, other):
 
                 # 主循环等待
                 while wrapper.is_running() and not stop_event.is_set():
-                    time.sleep(1)
+                    time.sleep(5)
 
                 if stop_event.is_set():
                     # 阈值触发，停止服务器
@@ -121,7 +121,7 @@ def run(args, other):
                     tracker.stop()
                     time.sleep(3)  # 等待激活文件保存
                     # 执行剪枝
-                    logger.info("开始执行剪枝...")
+                    logger.info("开始执行专家裁剪...")
                     # 假设 expert_activations.csv 在当前目录
                     csv_path = "expert_activations.csv"
                     if os.path.exists(csv_path):
@@ -145,7 +145,7 @@ def run(args, other):
 
                     continue  # 重启循环，使用新模型
             else:
-                # 剪枝已完成，普通运行模式
+                # 普通运行模式
                 while wrapper.is_running():
                     time.sleep(10)
 

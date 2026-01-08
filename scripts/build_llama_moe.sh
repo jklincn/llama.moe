@@ -6,13 +6,20 @@ set -euo pipefail
 # ----------------------------------------------------------------------
 # 1. 解析参数
 # ----------------------------------------------------------------------
-build_type="Debug"
-extra_flags="-g -O0 -fno-omit-frame-pointer -fno-optimize-sibling-calls -fno-inline"
+build_type="Release"
+extra_flags=""
 
-while getopts ":r" opt; do
-    case "$opt" in
-        r) build_type="Release"; extra_flags="";;
-        *) echo "Usage: $0 [-r]  # -r = Release" >&2; exit 1;;
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --debug)
+            build_type="Debug"
+            extra_flags="-g -O0 -fno-omit-frame-pointer -fno-optimize-sibling-calls -fno-inline"
+            shift
+            ;;
+        *)
+            echo "Usage: $0 [--debug]" >&2
+            exit 1
+            ;;
     esac
 done
 

@@ -218,6 +218,27 @@ def get_override_rules(
             if not (layer_re.search(name) and "shexp" in name)
         }
 
+    # SSM (State Space Model)
+    # 优先卸载到 GPU，优先级高于 exp
+    ssm_per_layer = layers_bytes(tensors, r"ssm")
+    if ssm_per_layer:
+        cpu_ssm_layers, ssm_gpu_usage = _calculate_reverse_offload(
+            ssm_per_layer, cur
+        )
+        cur -= ssm_gpu_usage
+        if cpu_ssm_layers:
+            layer_range = "|".join(map(str, cpu_ssm_layers))
+            rule = f"blk\\.({layer_range})\\..*ssm.*=CPU"
+            cpu_rules.append(rule)
+        logger.debug(
+            f"Offloaded {n_layer - len(cpu_ssm_layers)}/{n_layer} 'SSM': {fmt_bytes(ssm_gpu_usage)}, remain: {fmt_bytes(cur)}"
+        )
+        tensors = {
+            name: size
+            for name, size in tensors.items()
+            if not (layer_re.search(name) and "ssm" in name)
+        }
+
     # exp
     exp_per_layer = layers_bytes(tensors, r"exp[s_.]")
     if exp_per_layer:

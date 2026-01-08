@@ -23,13 +23,13 @@ os.environ.pop("HTTPS_PROXY", None)
 model_list = {
     "Qwen3-30B-A3B-Q8_0": {
         "unchanged": "/mnt/data/gguf/Qwen3-30B-A3B-Q8_0.gguf",
-        "cov85": "/mnt/data/gguf/Qwen3-30B-A3B-Q8_0-pruned_cov85.gguf",
-        "cov90": "/mnt/data/gguf/Qwen3-30B-A3B-Q8_0-pruned_cov90.gguf",
-        "cov91": "/mnt/data/gguf/Qwen3-30B-A3B-Q8_0-pruned_cov91.gguf",
-        "cov92": "/mnt/data/gguf/Qwen3-30B-A3B-Q8_0-pruned_cov92.gguf",
-        "cov93": "/mnt/data/gguf/Qwen3-30B-A3B-Q8_0-pruned_cov93.gguf",
-        "cov94": "/mnt/data/gguf/Qwen3-30B-A3B-Q8_0-pruned_cov94.gguf",
-        "cov95": "/mnt/data/gguf/Qwen3-30B-A3B-Q8_0-pruned_cov95.gguf",
+        "cov85": "/home/lin/bs/llama.moe/pruned_models/Qwen3-30B-pruned-cov85.gguf",
+        "cov90": "/home/lin/bs/llama.moe/pruned_models/Qwen3-30B-pruned-cov90.gguf",
+        "cov91": "/home/lin/bs/llama.moe/pruned_models/Qwen3-30B-pruned-cov91.gguf",
+        "cov92": "/home/lin/bs/llama.moe/pruned_models/Qwen3-30B-pruned-cov92.gguf",
+        "cov93": "/home/lin/bs/llama.moe/pruned_models/Qwen3-30B-pruned-cov93.gguf",
+        "cov94": "/home/lin/bs/llama.moe/pruned_models/Qwen3-30B-pruned-cov94.gguf",
+        "cov95": "/home/lin/bs/llama.moe/pruned_models/Qwen3-30B-pruned-cov95.gguf",
     },
 }
 versions_list = [
@@ -104,7 +104,8 @@ def run_evalscope(model: str, model_dir: Path, ctx_size: int, logger: logging.Lo
     # - gsm8k
     # - mmlu
     datasets = ["gsm8k"]
-    limit = 10
+    limit = 20
+    if_limit = False
     task_config = TaskConfig(
         model=model,
         datasets=datasets,
@@ -117,10 +118,10 @@ def run_evalscope(model: str, model_dir: Path, ctx_size: int, logger: logging.Lo
             "temperature": 0.0,
             "stream": True,
         },
-        # limit=limit,
+        limit=limit if if_limit else None,
         use_cache=str(model_dir / "evalscope"),
     )
-    logger.info(f"评估数据集 {datasets}, 限制样本数: {limit}")
+    logger.info(f"评估数据集 {datasets}, 限制样本数: {limit if if_limit else '不限'}")
     start_time = time.time()
     logger.info("开始启动评估")
 
@@ -158,6 +159,9 @@ def main():
     ]
     # fmt: on
 
+
+    enable_moe_counter = True
+    
     for name, model in model_list.items():
         if name not in test_models:
             continue
@@ -177,13 +181,12 @@ def main():
             logger.info(f"正在启动 {name} ({version}) ...")
 
             numactl_cmd, numa_args = check_numa(path)
-            final_arg += (
-                get_override_rules(GGUFReader(path), ctx_size) + numa_args
-            )
+            final_arg += get_override_rules(GGUFReader(path), ctx_size) + numa_args
             wrapper = LlamaServerWrapper(
                 str(bin_path),
                 model_dir,
                 numactl=numactl_cmd,
+                moe_counter=enable_moe_counter,
             )
 
             try:
@@ -216,7 +219,12 @@ def main():
     logger.info("所有评估完成")
 
     # 生成报告/分析
-    analysis(work_dir, model_order=test_models, version_order=test_versions)
+    analysis(
+        work_dir,
+        model_order=test_models,
+        version_order=test_versions,
+        base_str="unchanged",
+    )
 
 
 if __name__ == "__main__":

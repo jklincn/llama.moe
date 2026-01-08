@@ -16,6 +16,7 @@ class LlamaServerWrapper:
         bin_path: str = "llama.cpp/build/bin/llama-server",
         work_dir: Path = Path.cwd(),
         numactl: Optional[Sequence[str]] = None,
+        moe_counter: bool = True,
     ):
         if not Path(bin_path).is_file():
             raise FileNotFoundError("找不到 llama-server 可执行文件, 请先进行编译")
@@ -24,6 +25,7 @@ class LlamaServerWrapper:
         self.numactl: Optional[list[str]] = (
             list(numactl) if numactl is not None else None
         )
+        self.moe_counter = moe_counter
         self.process: Optional[subprocess.Popen] = None
         self.output_thread: Optional[threading.Thread] = None
         self._log_file: Optional[object] = None
@@ -67,6 +69,15 @@ class LlamaServerWrapper:
         # 打开日志文件（保持句柄，用于持续写入）
         self._log_file = open(self.log_path, "w", buffering=1, encoding="utf-8")
 
+        env = {"WORK_DIR": str(self.work_dir)}
+
+        # 检查参数和当前环境变量
+        sys_env_counter = os.environ.get("LLAMA_MOE_COUNTER", "1")
+        if not self.moe_counter or sys_env_counter == "0":
+            env["LLAMA_MOE_COUNTER"] = "0"
+        else:
+            env["LLAMA_MOE_COUNTER"] = "1"
+
         popen_kwargs = dict(
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
@@ -75,7 +86,7 @@ class LlamaServerWrapper:
             errors="replace",
             bufsize=1,
             start_new_session=True,
-            env={"WORK_DIR": str(self.work_dir)},
+            env=env,
         )
 
         try:

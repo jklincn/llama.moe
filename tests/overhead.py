@@ -6,7 +6,6 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-import openai
 from evalscope.config import EvalType, TaskConfig
 from evalscope.run import run_task
 from gguf import GGUFReader
@@ -22,48 +21,32 @@ os.environ.pop("HTTP_PROXY", None)
 os.environ.pop("HTTPS_PROXY", None)
 
 model_list = {
-    "Qwen1.5-MoE-A2.7B-Q8_0": {
-        "path": "/mnt/data/gguf/Qwen1.5-MoE-A2.7B-Q8_0.gguf",
-        "llama.cpp": ["--n-gpu-layers", "24"],
-    },
-    "Qwen3-30B-A3B-Q8_0": {
-        "path": "/mnt/data/gguf/Qwen3-30B-A3B-Q8_0.gguf",
-        "llama.cpp": ["--n-gpu-layers", "35"],
-    },
-    "GLM-4.5-Air-Q8_0": {
-        "path": "/mnt/data/gguf/GLM-4.5-Air-Q8_0.gguf",
-        "llama.cpp": ["--n-gpu-layers", "10"],
-    },
-    "Qwen3-235B-A22B-Q8_0": {
-        "path": "/mnt/data/gguf/Qwen3-235B-A22B-Q8_0.gguf",
-        "llama.cpp": ["--n-gpu-layers", "8"],
-    },
-    "GLM-4.5-Q8_0": {
-        "path": "/mnt/data/gguf/GLM-4.5-Q8_0.gguf",
-        "llama.cpp": ["--n-gpu-layers", "6"],
-    },
-    "DeepSeek-R1-Q4_K_M": {
-        "path": "/mnt/data/gguf/DeepSeek-R1-Q4_K_M.gguf",
-        "llama.cpp": ["--n-gpu-layers", "2"],
-    },
+    "Qwen3-30B-A3B-Q8_0": "/mnt/data/gguf/Qwen3-30B-A3B-Q8_0.gguf",
+    "GLM-4.5-Air-Q4_K_M": "/mnt/data/gguf/GLM-4.5-Air-Q4_K_M.gguf",
+    "Qwen3-235B-A22B-Q4_K_M": "/mnt/data/gguf/Qwen3-235B-A22B-Q4_K_M.gguf",
+    "GLM-4.5-Q4_K_M": "/mnt/data/gguf/GLM-4.5-Q4_K_M.gguf",
 }
-versions_list = ["llama.cpp", "llama.moe"]
+
+versions_list = {
+    "unchanged": "/home/lin/bs/llama.moe/build/llama-server_unchanged",
+    "counts": "/home/lin/bs/llama.moe/build/llama-server_counts",
+    "counts+weight": "/home/lin/bs/llama.moe/build/llama-server_counts-weight",
+}
 
 test_models = [
-    # "Qwen1.5-MoE-A2.7B-Q8_0",
     "Qwen3-30B-A3B-Q8_0",
-    # "GLM-4.5-Air-Q8_0",
-    # "Qwen3-235B-A22B-Q8_0",
-    # "GLM-4.5-Q8_0",
-    # "DeepSeek-R1-Q4_K_M",
-]
-test_versions = [
-    # "llama.cpp",
-    "llama.moe",
+    # "GLM-4.5-Air-Q4_K_M",
+    # "Qwen3-235B-A22B-Q4_K_M",
+    # "GLM-4.5-Q4_K_M",
 ]
 
-easy = False
-ctx_size = 600 if easy else 4096
+test_versions = [
+    "unchanged",
+    "counts",
+    "counts+weight",
+]
+
+ctx_size = 4096
 
 
 def setup_logging(log_file: Path):
@@ -104,34 +87,12 @@ def setup_logging(log_file: Path):
         logging.getLogger(noisy).setLevel(logging.WARNING)
 
 
-def run_easy():
-    try:
-        client = openai.OpenAI(base_url="http://localhost:8080", api_key="sk-1234")
-        messages = [
-            {
-                "role": "user",
-                "content": "请详细介绍一下北京这座城市。",
-            },
-        ]
-        completion = client.chat.completions.create(
-            model="local-model",
-            messages=messages,
-            temperature=0.7,
-            max_tokens=512,
-        )
-        response_content = completion.choices[0].message.content
-        print(f"模型回复: {response_content}\n")
-    except Exception as e:
-        print(f"发生错误: {e}")
-
-
 def run_evalscope(model: str, model_dir: Path, ctx_size: int, logger: logging.Logger):
     # datasets
     # - gsm8k
     # - mmlu
     datasets = ["gsm8k"]
-    limit = 10
-    if_limit = False
+    limit = 100
     task_config = TaskConfig(
         model=model,
         datasets=datasets,
@@ -144,10 +105,10 @@ def run_evalscope(model: str, model_dir: Path, ctx_size: int, logger: logging.Lo
             "temperature": 0.0,
             "stream": True,
         },
-        limit=limit if if_limit else None,
+        limit=limit,
         use_cache=str(model_dir / "evalscope"),
     )
-    logger.info(f"评估数据集 {datasets}, 限制样本数: {limit if if_limit else '不限'}")
+    logger.info(f"评估数据集 {datasets}, 限制样本数: {limit}")
     start_time = time.time()
     logger.info("开始启动评估")
 
@@ -185,42 +146,27 @@ def main():
     ]
     # fmt: on
 
-    enable_moe_counter = True
-
-    for name, model in model_list.items():
+    for name, model_path in model_list.items():
         if name not in test_models:
             continue
-        for version in versions_list:
+        for version, bin_path in versions_list.items():
             if version not in test_versions:
                 continue
 
             model_dir = work_dir / name.replace("/", "_") / version
             model_dir.mkdir(parents=True, exist_ok=True)
-            path = model["path"]
-            final_arg = common_args + ["--model", path]
+            final_arg = common_args + ["--model", model_path]
 
             clear_page_cache()
             logger.info(f"正在启动 {name} ({version}) ...")
 
-            match version:
-                case "llama.cpp":
-                    final_arg += model["llama.cpp"]
-                    wrapper = LlamaServerWrapper(
-                        str(bin_path),
-                        model_dir,
-                        moe_counter=enable_moe_counter,
-                    )
-                case "llama.moe":
-                    numactl_cmd, numa_args = check_numa(path)
-                    final_arg += (
-                        get_override_rules(GGUFReader(path), ctx_size) + numa_args
-                    )
-                    wrapper = LlamaServerWrapper(
-                        str(bin_path),
-                        model_dir,
-                        numactl=numactl_cmd,
-                        moe_counter=enable_moe_counter,
-                    )
+            numactl_cmd, numa_args = check_numa(model_path)
+            final_arg += get_override_rules(GGUFReader(model_path), ctx_size) + numa_args
+            wrapper = LlamaServerWrapper(
+                str(bin_path),
+                model_dir,
+                numactl=numactl_cmd,
+            )
 
             try:
                 pid = wrapper.start(final_arg, timeout=3600)
@@ -233,11 +179,7 @@ def main():
                 monitor = SysMonitor(interval=0.1)
                 monitor.start()
 
-                # 运行评估
-                if easy:
-                    run_easy()
-                else:
-                    run_evalscope(name, model_dir, ctx_size, logger)
+                run_evalscope(name, model_dir, ctx_size, logger)
 
             except Exception as e:
                 logger.exception(f"运行 {name} ({version}) 时出错: {e}")
@@ -256,13 +198,12 @@ def main():
     logger.info("所有评估完成")
 
     # 生成报告/分析
-    if not easy:
-        analysis(
-            work_dir,
-            model_order=test_models,
-            version_order=test_versions,
-            base_str="llama.cpp",
-        )
+    analysis(
+        work_dir,
+        model_order=test_models,
+        version_order=test_versions,
+        base_str="unchanged",
+    )
 
 
 if __name__ == "__main__":
