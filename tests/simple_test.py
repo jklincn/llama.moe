@@ -1,14 +1,22 @@
 import openai
 
 try:
-    client = openai.OpenAI(base_url="http://localhost:8080", api_key="sk-1234")
+    client = openai.OpenAI(base_url="http://localhost:8080/v1", api_key="sk-1234")
+
+    # 自动查询模型
+    models_list = client.models.list()
+    if not models_list.data:
+        raise ValueError("未找到任何可用模型")
+    
+    model_id = models_list.data[0].id
+    print(f"自动检测到模型: {model_id}")
 
     messages = [
         {"role": "user", "content": "你好！请你用中文介绍一下自己。"},
     ]
 
     completion = client.chat.completions.create(
-        model="local-model",
+        model=model_id,
         messages=messages,
         temperature=0.7,
     )

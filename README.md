@@ -21,7 +21,6 @@ cd llama.moe
 scripts/build_llama_moe.sh
 
 uv sync
-uv pip install .
 ```
 
 ### Run

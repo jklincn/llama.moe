@@ -25,6 +25,7 @@
 2. **Python Environment**:
    - Sync dependencies: `uv sync`
    - Install package: `uv pip install -e .`
+   - **Activation**: ALWAYS activate the virtual environment (`source .venv/bin/activate`) before running any Python commands or scripts.
 
 ### Running
 - Use the `llama-moe` command (installed via `project.scripts` in `pyproject.toml`).
