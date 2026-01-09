@@ -18,8 +18,11 @@ sudo apt install build-essential cmake ccache libcurl4-openssl-dev ninja-build
 ```
 git clone --recurse-submodules https://github.com/jklincn/llama.moe.git
 cd llama.moe
+
+# Build llama.cpp
 scripts/build_llama_moe.sh
 
+# Build llama.moe
 uv sync
 ```
 
