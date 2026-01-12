@@ -16,7 +16,6 @@ class LlamaServerWrapper:
         bin_path: str = "llama.cpp/build/bin/llama-server",
         work_dir: Path = Path.cwd(),
         numactl: Optional[Sequence[str]] = None,
-        moe_counter: bool = True,
     ):
         if not Path(bin_path).is_file():
             raise FileNotFoundError("找不到 llama-server 可执行文件, 请先进行编译")
@@ -25,7 +24,7 @@ class LlamaServerWrapper:
         self.numactl: Optional[list[str]] = (
             list(numactl) if numactl is not None else None
         )
-        self.moe_counter = moe_counter
+        self.moe_counter = True if os.getenv("LLAMA_MOE_COUNTER") == "1" else False
         self.process: Optional[subprocess.Popen] = None
         self.output_thread: Optional[threading.Thread] = None
         self._log_file: Optional[object] = None
@@ -72,11 +71,10 @@ class LlamaServerWrapper:
         env = {"WORK_DIR": str(self.work_dir)}
 
         # 检查参数和当前环境变量
-        sys_env_counter = os.environ.get("LLAMA_MOE_COUNTER", "1")
-        if not self.moe_counter or sys_env_counter == "0":
-            env["LLAMA_MOE_COUNTER"] = "0"
-        else:
+        if self.moe_counter:
             env["LLAMA_MOE_COUNTER"] = "1"
+        else:
+            env["LLAMA_MOE_COUNTER"] = "0"
 
         popen_kwargs = dict(
             stdout=subprocess.PIPE,

@@ -1,3 +1,4 @@
+import json
 import openai
 
 try:
@@ -20,9 +21,9 @@ try:
         messages=messages,
         temperature=0.7,
     )
-
-    response_content = completion.choices[0].message.content
-    print(f"模型回复: {response_content}\n")
+    full_response_json = completion.model_dump()
+    print("返回值：")
+    print(json.dumps(full_response_json, ensure_ascii=False, indent=2))
 
 except openai.APIConnectionError as e:
     print("连接错误: 无法连接到服务。")

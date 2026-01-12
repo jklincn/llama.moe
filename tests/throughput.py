@@ -185,7 +185,7 @@ def main():
     ]
     # fmt: on
 
-    enable_moe_counter = True
+    os.environ["LLAMA_MOE_COUNTER"] = "0"
 
     for name, model in model_list.items():
         if name not in test_models:
@@ -208,7 +208,6 @@ def main():
                     wrapper = LlamaServerWrapper(
                         str(bin_path),
                         model_dir,
-                        moe_counter=enable_moe_counter,
                     )
                 case "llama.moe":
                     numactl_cmd, numa_args = check_numa(path)
@@ -219,7 +218,6 @@ def main():
                         str(bin_path),
                         model_dir,
                         numactl=numactl_cmd,
-                        moe_counter=enable_moe_counter,
                     )
 
             try:
