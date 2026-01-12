@@ -7,7 +7,7 @@
 # - /mnt/data/gguf/GLM-4.5-Q8_0.gguf
 # - /mnt/data/gguf/MiniMax-M2-Q4_K_M.gguf
 
-model="/mnt/data/gguf/GLM-4.5-Air-Q8_0.gguf"
+model="/mnt/data/gguf/Qwen3-235B-A22B-Q4_K_M.gguf"
 
 dir=$(cd $(dirname "$0") && pwd)
 server="$dir/../llama.cpp/build/bin/llama-server"
@@ -15,4 +15,4 @@ $server --model $model \
     --seed 0 \
     --ctx-size 4096 \
     --api-key sk-1234 \
-    --n-gpu-layers 10
+    --n-gpu-layers 15

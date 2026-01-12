@@ -1,4 +1,5 @@
 import json
+import time
 import openai
 
 try:
@@ -16,13 +17,14 @@ try:
         {"role": "user", "content": "你好！请你用中文介绍一下自己。"},
     ]
 
+    start_time = time.time()
     completion = client.chat.completions.create(
         model=model_id,
         messages=messages,
         temperature=0.7,
     )
     full_response_json = completion.model_dump()
-    print("返回值：")
+    print("请求完成，响应时间: {:.2f} 秒".format(time.time() - start_time))
     print(json.dumps(full_response_json, ensure_ascii=False, indent=2))
 
 except openai.APIConnectionError as e:
