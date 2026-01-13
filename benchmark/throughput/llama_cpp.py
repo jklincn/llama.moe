@@ -1,26 +1,22 @@
 import os
-import signal
 import time
 from datetime import datetime
 from pathlib import Path
 from subprocess import Popen
 
+import psutil
 import requests
 from .server_handler import ServerHandler
 
 model_list = {
-    # "Qwen3-Next-80B-A3B-Instruct": {
-    #     "path": "/mnt/data/gguf/Qwen3-Next-80B-A3B-Instruct-Q4_K_M.gguf",
-    #     "n-gpu-layers": 24,
-    # },
+    "Qwen3-Next-80B-A3B-Instruct": {
+        "path": "/mnt/data/gguf/Qwen3-Next-80B-A3B-Instruct-Q8_0.gguf",
+        "n-gpu-layers": 14,
+    },
     "GLM-4.5-Air": {
         "path": "/mnt/data/gguf/GLM-4.5-Air-Q4_K_M.gguf",
         "n-gpu-layers": 16,
     },
-    # "MiniMax-M2":{
-    #     "path": "/mnt/data/gguf/MiniMax-M2-Q4_K_M.gguf",
-    #     "n-gpu-layers": 10,
-    # },
     "Qwen3-235B-A22B": {
         "path": "/mnt/data/gguf/Qwen3-235B-A22B-Q4_K_M.gguf",
         "n-gpu-layers": 15,
@@ -37,6 +33,7 @@ class LlamaCppServerHandler(ServerHandler):
         self.log_dir = log_dir
         self.process = None
         self.log_f = None
+        self.port = 8080
 
         # Statistics
         self.success_count = 0
@@ -45,7 +42,30 @@ class LlamaCppServerHandler(ServerHandler):
 
     def get_server_name(self) -> str:
         return "llama.cpp"
-
+    
+    def _kill_process_on_port(self, port: int):
+        """杀死占用指定端口的进程"""
+        try:
+            for conn in psutil.net_connections():
+                if conn.laddr.port == port and conn.status == "LISTEN":
+                    try:
+                        process = psutil.Process(conn.pid)
+                        print(
+                            f"Found process occupying port {port}: PID={conn.pid}, name={process.name()}"
+                        )
+                        process.terminate()
+                        try:
+                            process.wait(timeout=20)
+                            print(f"Successfully terminated process {conn.pid} occupying port {port}")
+                        except psutil.TimeoutExpired:
+                            print(f"Process {conn.pid} did not exit within 20 seconds, using SIGKILL")
+                            process.kill()
+                            process.wait(timeout=5)
+                            print(f"Process {conn.pid} was forcibly terminated")
+                    except (psutil.NoSuchProcess, psutil.AccessDenied) as e:
+                        print(f"Error terminating process {conn.pid}: {e}")
+        except Exception as e:
+            print(f"Error cleaning up port {port}: {e}")
     def _wait_for_ready(
         self,
         url: str = "http://127.0.0.1:8080/health",
@@ -73,6 +93,10 @@ class LlamaCppServerHandler(ServerHandler):
         return False
 
     def start_server(self):
+
+        self._kill_process_on_port(self.port)
+        time.sleep(1)
+
         # Locate llama-server binary
         current_dir = Path(__file__).parent.resolve()
         project_root = current_dir.parent.parent
@@ -125,21 +149,31 @@ class LlamaCppServerHandler(ServerHandler):
             raise RuntimeError(f"llama-server failed to start for {self.model_name}")
 
     def stop_server(self):
+        """停止服务器进程"""
         if self.process and self.process.poll() is None:
-            print("Stopping llama-server...")
+            print(f"Stoping llama-server (PID: {self.process.pid})...")
             try:
-                os.killpg(os.getpgid(self.process.pid), signal.SIGTERM)
-                self.process.wait(timeout=10)
-            except Exception:
-                print("Force killing server process group...")
+                process = psutil.Process(self.process.pid)
+                process.terminate()
                 try:
-                    os.killpg(os.getpgid(self.process.pid), signal.SIGKILL)
-                except Exception:
-                    pass
+                    process.wait(timeout=20)
+                    print("Process exited normally")
+                except psutil.TimeoutExpired:
+                    print(f"Process {self.process.pid} did not exit within 20 seconds, using SIGKILL")
+                    process.kill()
+                    process.wait(timeout=5)
+                    print("Process was forcibly terminated")
+            except (psutil.NoSuchProcess, psutil.AccessDenied) as e:
+                print(f"Error terminating process: {e}")
+            except Exception as e:
+                print(f"Error stopping server: {e}")
         self.process = None
 
         if self.log_f:
-            self.log_f.close()
+            try:
+                self.log_f.close()
+            except Exception:
+                pass
             self.log_f = None
 
     def handle_result(self, data, duration):
@@ -166,8 +200,7 @@ class LlamaCppServerHandler(ServerHandler):
 
 
 if __name__ == "__main__":
-    # Test script
-    handler = LlamaCppServerHandler("zai-org/GLM-4.5-Air")
+    handler = LlamaCppServerHandler("GLM-4.5-Air")
     try:
         handler.start_server()
         time.sleep(5)

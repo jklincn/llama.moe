@@ -1,6 +1,6 @@
 import os
-import signal
 import time
+import psutil
 from datetime import datetime
 from subprocess import Popen
 
@@ -9,21 +9,16 @@ from modelscope.hub.snapshot_download import snapshot_download
 from .server_handler import ServerHandler
 
 model_list = {
-    # "Qwen3-Next-80B-A3B-Instruct": {
-    #     "path": "/mnt/data/gguf/Qwen3-Next-80B-A3B-Instruct-Q4_K_M.gguf",
-    #     "hf_path": "Qwen/Qwen3-Next-80B-A3B-Instruct",
-    #     "moe_device": "{'cuda':13,'cpu':35}",
-    # },
+    "Qwen3-Next-80B-A3B-Instruct": {
+        "path": "/mnt/data/safetensors/Qwen3-Next-80B-A3B-Instruct-FP8",
+        "hf_path": None,
+        "moe_device": "{'cuda':13,'cpu':35}",
+    },
     "GLM-4.5-Air": {
         "path": "/mnt/data/gguf/GLM-4.5-Air-Q4_K_M.gguf",
         "hf_path": "zai-org/GLM-4.5-Air",
-        "moe_device": "{'cuda':10,'cpu':34}",
+        "moe_device": "{'cuda':11,'cpu':35}",
     },
-    # "MiniMax-M2": {
-    #     "path": "/mnt/data/gguf/MiniMax-M2-Q4_K_M.gguf",
-    #     "hf_path": "MiniMax/MiniMax-M2",
-    #     "moe_device": "{'cuda':7,'cpu':39}",
-    # },
     "Qwen3-235B-A22B": {
         "path": "/mnt/data/gguf/Qwen3-235B-A22B-Q4_K_M.gguf",
         "hf_path": "Qwen/Qwen3-235B-A22B",
@@ -39,6 +34,7 @@ class FastLLMServerHandler(ServerHandler):
         self.model_name = model_name
         self.model_info = model_list[model_name]
         self.log_dir = log_dir
+        self.port = 8080
 
         self.process = None
         self.log_f = None
@@ -51,6 +47,27 @@ class FastLLMServerHandler(ServerHandler):
     def get_server_name(self) -> str:
         return "FastLLM"
 
+    def _kill_process_on_port(self, port: int):
+        """杀死占用指定端口的进程"""
+        try:
+            for conn in psutil.net_connections():
+                if conn.laddr.port == port and conn.status == 'LISTEN':
+                    try:
+                        process = psutil.Process(conn.pid)
+                        print(f"Found process occupying port {port}: PID={conn.pid}, name={process.name()}")
+                        process.terminate()
+                        try:
+                            process.wait(timeout=20)
+                            print(f"Successfully terminated process {conn.pid} occupying port {port}")
+                        except psutil.TimeoutExpired:
+                            print(f"Process {conn.pid} did not exit within 20 seconds, using SIGKILL")
+                            process.kill()
+                            process.wait(timeout=5)
+                            print(f"Process {conn.pid} was forcibly terminated")
+                    except (psutil.NoSuchProcess, psutil.AccessDenied) as e:
+                        print(f"Error terminating process {conn.pid}: {e}")
+        except Exception as e:
+            print(f"Error cleaning up port {port}: {e}")
     def _get_ori(self, hf_path: str) -> str:
         model_dir = snapshot_download(
             hf_path,
@@ -84,23 +101,16 @@ class FastLLMServerHandler(ServerHandler):
         return False
 
     def start_server(self):
-        model_path = self.model_info["path"]
+
+        self._kill_process_on_port(self.port)
+        time.sleep(1)  # 等待端口释放
+
+        cmd = ["ftllm", "server", self.model_info["path"]]
+
         hf_path = self.model_info["hf_path"]
-        moe_device = self.model_info["moe_device"]
+        cmd += ["--ori", self._get_ori(hf_path)] if hf_path is not None else []
 
-        ori_path = self._get_ori(hf_path)
-
-        cmd = [
-            "ftllm",
-            "server",
-            model_path,
-            "--ori",
-            ori_path,
-            "--device",
-            "cuda",
-            "--moe_device",
-            moe_device,
-        ]
+        cmd += ["--device", "cuda", "--moe_device", self.model_info["moe_device"]]
 
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
         safe_name = self.model_name.replace("/", "_")
@@ -135,21 +145,32 @@ class FastLLMServerHandler(ServerHandler):
             raise RuntimeError(f"FastLLM server failed to start for {self.model_name}")
 
     def stop_server(self):
+        """停止服务器进程"""
         if self.process and self.process.poll() is None:
-            print("Stopping FastLLM server...")
+            print(f"Stoping FastLLM server (PID: {self.process.pid})...")
             try:
-                os.killpg(os.getpgid(self.process.pid), signal.SIGTERM)
-                self.process.wait(timeout=10)
-            except Exception:
-                print("Force killing server process group...")
+                process = psutil.Process(self.process.pid)
+                process.terminate()
                 try:
-                    os.killpg(os.getpgid(self.process.pid), signal.SIGKILL)
-                except Exception:
-                    pass
+                    process.wait(timeout=20)
+                    print("Server exited normally")
+                except psutil.TimeoutExpired:
+                    print(f"Process {self.process.pid} did not exit within 20 seconds, using SIGKILL")
+                    process.kill()
+                    process.wait(timeout=5)
+                    print("Process was forcibly terminated")
+            except (psutil.NoSuchProcess, psutil.AccessDenied) as e:
+                print(f"Error terminating process: {e}")
+            except Exception as e:
+                print(f"Error stopping server: {e}")
+        
         self.process = None
 
         if self.log_f:
-            self.log_f.close()
+            try:
+                self.log_f.close()
+            except Exception:
+                pass
             self.log_f = None
 
     def handle_result(self, data, duration):

@@ -156,7 +156,7 @@ class LlamaServerWrapper:
                 logger.error(f"stop: 发送信号失败：{e}")
 
             try:
-                return_code = self.process.wait(timeout=60)
+                return_code = self.process.wait(timeout=30)
                 if return_code != 0:
                     logger.warning(f"llama-server 退出异常, 子返回码 {return_code}")
             except subprocess.TimeoutExpired:
