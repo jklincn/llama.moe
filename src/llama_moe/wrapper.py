@@ -14,11 +14,12 @@ logger = logging.getLogger("wrapper")
 class LlamaServerWrapper:
     def __init__(
         self,
-        bin_path: str = "llama.cpp/build/bin/llama-server",
-        work_dir: Path = Path.cwd(),
-        numactl: Optional[Sequence[str]] = None,
-        host: str = "127.0.0.1",
-        port: int = 8080,
+        bin_path: str,
+        work_dir: Path,
+        numactl: Optional[Sequence[str]],
+        host: str,
+        port: int,
+        log_to_file: bool,
     ):
         if not Path(bin_path).is_file():
             raise FileNotFoundError("找不到 llama-server 可执行文件, 请先进行编译")
@@ -31,6 +32,7 @@ class LlamaServerWrapper:
 
         self.host = host
         self.port = port
+        self.log_to_file = log_to_file
 
         self.moe_counter = os.getenv("LLAMA_MOE_COUNTER") == "1"
         self.process: Optional[subprocess.Popen] = None
@@ -45,31 +47,33 @@ class LlamaServerWrapper:
         if self.numactl:
             cmd = self.numactl + cmd
 
-        logger.debug(f"启动命令: {' '.join(cmd)}")
-        logger.debug(f"日志文件: {self.log_path}")
-
         self.work_dir.mkdir(parents=True, exist_ok=True)
 
         env = os.environ.copy()
         env["WORK_DIR"] = str(self.work_dir)
         env["LLAMA_MOE_COUNTER"] = "1" if self.moe_counter else "0"
 
-        self._log_file = open(
-            self.log_path, "w", buffering=1, encoding="utf-8", errors="replace"
+        popen_kwargs = dict(
+            text=True,
+            bufsize=1,
+            start_new_session=True,
+            env=env,
+            cwd=str(self.work_dir),
+            close_fds=True,
         )
 
-        try:
-            self.process = subprocess.Popen(
-                cmd,
-                stdout=self._log_file,
-                stderr=self._log_file,
-                text=True,
-                bufsize=1,
-                start_new_session=True,
-                env=env,
-                cwd=str(self.work_dir),
-                close_fds=True,
+        # 是否重定向日志
+        if self.log_to_file:
+            self._log_file = open(
+                self.log_path, "w", buffering=1, encoding="utf-8", errors="replace"
             )
+            popen_kwargs["stdout"] = self._log_file
+            popen_kwargs["stderr"] = self._log_file
+        else:
+            self._log_file = None
+
+        try:
+            self.process = subprocess.Popen(cmd, **popen_kwargs)
         except FileNotFoundError:
             logger.error(f"找不到可执行文件: {cmd[0]}")
             self._cleanup_after_start_failure()
@@ -79,7 +83,6 @@ class LlamaServerWrapper:
             self._cleanup_after_start_failure()
             return -1
 
-        # ✅ 用 HTTP 判定 ready（替换日志扫描）
         if not self._wait_for_ready_http(timeout=timeout):
             logger.error(f"启动失败: {timeout} 秒内未检测到服务 ready")
             self.stop()
@@ -90,7 +93,7 @@ class LlamaServerWrapper:
     def _wait_for_ready_http(
         self,
         timeout: int,
-        interval_sec: float = 0.5,
+        interval_sec: float = 2,
         per_request_timeout: float = 2.0,
     ) -> bool:
         assert self.process is not None
@@ -99,7 +102,6 @@ class LlamaServerWrapper:
         deadline = time.time() + timeout
 
         while time.time() < deadline:
-            # 子进程提前挂了，直接失败
             if self.process.poll() is not None:
                 logger.error(f"进程提前退出，returncode={self.process.returncode}")
                 return False

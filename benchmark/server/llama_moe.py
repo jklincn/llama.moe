@@ -110,6 +110,7 @@ class LlamaMoeServerHandler(ServerHandler):
             "--api-key", "sk-1234",
             "--ctx-size", "4096",
             "--seed", "0",
+            "--no-log-file",
         ]
         # fmt: on
 

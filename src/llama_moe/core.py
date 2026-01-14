@@ -1,13 +1,15 @@
+import logging
+import os
+from pathlib import Path
 import threading
 import time
-from gguf import GGUFReader
-import logging
 
-from llama_moe.tracker import MetricsTracker
+from gguf import GGUFReader
+
 from .override import get_override_rules
-from .wrapper import LlamaServerWrapper
 from .pruner import prune_model_with_report
-import os
+from .tracker import MetricsTracker
+from .wrapper import LlamaServerWrapper
 
 logger = logging.getLogger("main")
 
@@ -63,6 +65,12 @@ def check_model(model_path: str):
 
 def run(args, other):
     model, ctx_size, kv_offload = args.model, args.ctx_size, not args.no_kv_offload
+    log_to_file = not getattr(args, "no_log_file", False)
+
+    bin_path = "llama.cpp/build/bin/llama-server"
+    work_dir = Path.cwd()
+    host = "127.0.0.1"
+    port = 8080
 
     check_model(model)
 
@@ -81,6 +89,7 @@ def run(args, other):
     current_model = model
     pruning_done = False
     threshold = args.prune_threshold
+
     while True:
         final_args = (
             ["--model", current_model]
@@ -89,10 +98,23 @@ def run(args, other):
             + other
             + numa_args
         )
-        wrapper = LlamaServerWrapper(numactl=numactl_cmd)
+
+        wrapper = LlamaServerWrapper(
+            bin_path=bin_path,
+            work_dir=work_dir,
+            numactl=numactl_cmd,
+            host=host,
+            port=port,
+            log_to_file=log_to_file,
+        )
+
         tracker = None
         try:
-            logger.info("正在启动 llama-server...")
+            if log_to_file:
+                logger.info(f"正在启动 llama-server... 日志将写入: {wrapper.log_path}")
+            else:
+                logger.info("正在启动 llama-server... 日志将直接输出到当前终端")
+                time.sleep(1)
 
             pid = wrapper.start(final_args, timeout=3600)
             if pid < 0:
@@ -129,10 +151,10 @@ def run(args, other):
                         try:
                             # 使用 coverage 模式进行剪枝
                             new_model_path = prune_model_with_report(
-                                current_model, 
-                                csv_path, 
-                                method='coverage', 
-                                threshold=args.prune_coverage
+                                current_model,
+                                csv_path,
+                                method="coverage",
+                                threshold=args.prune_coverage,
                             )
                             current_model = new_model_path
                             pruning_done = True
@@ -152,6 +174,7 @@ def run(args, other):
 
             break  # 正常退出循环
         except KeyboardInterrupt:
+            print("\n")
             logger.info("正在关闭...")
             break
         finally:

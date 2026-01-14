@@ -248,7 +248,7 @@ if __name__ == "__main__":
 
     models = [
         "Qwen3-Next-80B-A3B-Instruct",
-        # "GLM-4.5-Air",
+        "GLM-4.5-Air",
         # "Qwen3-235B-A22B",
     ]
 
@@ -258,7 +258,7 @@ if __name__ == "__main__":
         "llama-moe",
     ]
 
-    count = 10
+    count = 2
 
     total_tests = len(models) * len(servers)
     current_test = 0
