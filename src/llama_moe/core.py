@@ -66,6 +66,7 @@ def check_model(model_path: str):
 def run(args, other):
     model, ctx_size, kv_offload = args.model, args.ctx_size, not args.no_kv_offload
     log_to_file = not getattr(args, "no_log_file", False)
+    enable_counter = getattr(args, "enable_counter", False)
 
     bin_path = "llama.cpp/build/bin/llama-server"
     work_dir = Path.cwd()
@@ -85,6 +86,9 @@ def run(args, other):
         numa_result = check_numa(model)
         numactl_cmd, numa_args = numa_result if numa_result else (None, [])
 
+    if enable_counter:
+        logger.info("已启用 MoE activation counter")
+        
     if "--metrics" not in other:
         other.append("--metrics")
     if os.getenv("LLAMA_MOE_DEBUG") == "1":
@@ -110,6 +114,7 @@ def run(args, other):
             host=host,
             port=port,
             log_to_file=log_to_file,
+            enable_counter=enable_counter,
         )
 
         tracker = None

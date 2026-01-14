@@ -33,6 +33,7 @@ def build_parser():
     parser.add_argument("--no-log-file", dest="no_log_file", action="store_true", help="Do not redirect llama-server logs to file; print raw output to current terminal")
     parser.add_argument("--disable-numa", dest="disable_numa", action="store_true", help="Disable NUMA detection and numactl, run llama-server without NUMA binding")
     # llama-moe pruning parameters
+    parser.add_argument("--enable-counter", dest="enable_counter", action="store_true", help="Enable MoE activation counter (set LLAMA_MOE_COUNTER=1 for llama-server)")
     parser.add_argument("--prune-threshold", "-pt", dest="prune_threshold", type=int, default=-1, help="Token threshold for pruning")
     parser.add_argument("--prune-coverage", "-pc", dest="prune_coverage", type=float, default=90.0, help="Coverage percentage for pruning (0-100)")
     # discard the following parameters, llama-moe will add them automatically

@@ -10,13 +10,12 @@ from benchmark.server import (
 )
 
 
-def run_benchmark(server_name: str, model_name: str, count=100):
-    """
-    运行单次基准测试并返回结果
+def run_benchmark(
+    server_name: str, model_name: str, count=100, server_args=None, server_label=None
+):
+    server_args = server_args or []
+    framework_label = server_label or server_name
 
-    Returns:
-        dict: 包含测试结果的字典，如果失败则返回 None
-    """
     # 1. Prepare Dataset
     print(f"Preparing {count} prompts from dataset...")
     try:
@@ -32,25 +31,14 @@ def run_benchmark(server_name: str, model_name: str, count=100):
     print(f"Loaded {len(prompts)} prompts for benchmarking.")
 
     # 2. Initialize Handler
-    print(f"Initializing handler for {server_name} with model {model_name}...")
+    print(f"Initializing handler for {framework_label} with model {model_name}...")
+
     if server_name == "fastllm":
-        try:
-            handler = FastLLMServerHandler(model_name, log_dir="./logs")
-        except ValueError as e:
-            print(f"Error: {e}")
-            return None
+        handler = FastLLMServerHandler(model_name, log_dir="./logs")
     elif server_name == "llama-cpp":
-        try:
-            handler = LlamaCppServerHandler(model_name, log_dir="./logs")
-        except ValueError as e:
-            print(f"Error: {e}")
-            return None
+        handler = LlamaCppServerHandler(model_name, log_dir="./logs")
     elif server_name == "llama-moe":
-        try:
-            handler = LlamaMoeServerHandler(model_name, log_dir="./logs")
-        except ValueError as e:
-            print(f"Error: {e}")
-            return None
+        handler = LlamaMoeServerHandler(model_name, log_dir="./logs", args=server_args)
     else:
         print(f"Unknown framework: {server_name}")
         return None
@@ -58,14 +46,11 @@ def run_benchmark(server_name: str, model_name: str, count=100):
     # 3. Start Server
     try:
         handler.start_server()
-        # Give a small buffer after start, though start_server waits for ready
-        time.sleep(2)
     except Exception as e:
         print(f"Failed to start server: {e}")
         return None
 
     # 4. Initialize OpenAI Client
-    # FastLLM and llama-cpp usually default to port 8080
     base_url = "http://127.0.0.1:8080/v1"
     api_key = "sk-1234"
     client = openai.OpenAI(base_url=base_url, api_key=api_key)
@@ -81,19 +66,11 @@ def run_benchmark(server_name: str, model_name: str, count=100):
         handler.stop_server()
         return None
 
-    # 5. Configure Benchmark Parameters
     temperature = 0.0
     top_p = 1.0
     top_k = 1
     max_tokens = 128
 
-    # print("\nBenchmark Configuration:")
-    # print(f"  Framework:   {server_name}")
-    # print(f"  Model:       {model_name}")
-    # print(f"  Temperature: {temperature}")
-    # print(f"  Top-P:       {top_p}")
-    # print(f"  Top-K:       {top_k}")
-    # print(f"  Max Tokens:  {max_tokens}")
     print("Running benchmark...")
 
     failed_requests = 0
@@ -103,7 +80,6 @@ def run_benchmark(server_name: str, model_name: str, count=100):
             messages = [{"role": "user", "content": prompt}]
 
             try:
-                # Timing request duration (wall clock)
                 req_start = time.time()
 
                 if server_name == "fastllm":
@@ -179,19 +155,8 @@ def run_benchmark(server_name: str, model_name: str, count=100):
     finally:
         tps = handler.get_result()
 
-        # 6. Report Results
-        # print("Benchmark Results Summary:")
-        # print(f"Total Requests:           {total_requests}")
-        # print(f"Failed:                   {failed_requests}")
-        # print(f"Wall Time Elapsed:        {wall_time_s:.2f} s")
-        # print("-" * 60)
-
-        # print(f"Average Decode Throughput: {tps:.2f} tokens/s")
-        # print("-" * 60)
-
-        # 保存结果
         result = {
-            "framework": server_name,
+            "framework": framework_label,
             "model": model_name,
             "throughput_tps": tps,
         }
@@ -240,36 +205,42 @@ def print_results_table(results):
     print("\n" + "=" * 60)
 
 
-# python -m benchmark.throughput.main
+# python -m benchmark.overhead.main
 if __name__ == "__main__":
-    # 存储所有测试结果
     all_results = []
 
     models = [
         "Qwen3-Next-80B-A3B-Instruct",
         "GLM-4.5-Air",
-        # "Qwen3-235B-A22B",
+        "Qwen3-235B-A22B",
     ]
 
+    # fmt: off
     servers = [
-        # "llama-cpp",
-        # "fastllm",
-        "llama-moe",
+        {"name": "llama-moe", "label": "llama-moe", "args": []},
+        {"name": "llama-moe", "label": "llama-moe+counter", "args": ["--enable-counter"]},
     ]
+    # fmt: on
 
-    count = 2
+    count = 20
 
     total_tests = len(models) * len(servers)
     current_test = 0
 
     for model in models:
-        for server in servers:
+        for s in servers:
             current_test += 1
             print("\n" + "=" * 60)
-            print(f"TEST {current_test}/{total_tests}: {server} - {model}")
+            print(f"TEST {current_test}/{total_tests}: {s['label']} - {model}")
             print("=" * 60 + "\n")
 
-            result = run_benchmark(server, model, count)
+            result = run_benchmark(
+                s["name"],
+                model,
+                count,
+                server_args=s["args"],
+                server_label=s["label"],
+            )
 
             if result is not None:
                 all_results.append(result)
@@ -279,5 +250,4 @@ if __name__ == "__main__":
 
             time.sleep(1)
 
-    # 打印最终汇总表格
     print_results_table(all_results)

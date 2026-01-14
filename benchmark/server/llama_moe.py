@@ -22,7 +22,9 @@ model_list = {
 
 
 class LlamaMoeServerHandler(ServerHandler):
-    def __init__(self, model_name: str, log_dir: str = "./logs"):
+    def __init__(
+        self, model_name: str, log_dir: str = "./logs", args: list[str] = None
+    ):
         if model_name not in model_list:
             raise ValueError(f"Model {model_name} not found in model_list")
         self.model_name = model_name
@@ -31,6 +33,7 @@ class LlamaMoeServerHandler(ServerHandler):
         self.process = None
         self.log_f = None
         self.port = 8080
+        self.args = args if args is not None else []
 
         # Statistics
         self.success_count = 0
@@ -111,7 +114,7 @@ class LlamaMoeServerHandler(ServerHandler):
             "--ctx-size", "4096",
             "--seed", "0",
             "--no-log-file",
-        ]
+        ] + self.args
         # fmt: on
 
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")

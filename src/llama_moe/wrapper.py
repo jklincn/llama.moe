@@ -20,6 +20,7 @@ class LlamaServerWrapper:
         host: str,
         port: int,
         log_to_file: bool,
+        enable_counter: bool,
     ):
         if not Path(bin_path).is_file():
             raise FileNotFoundError("找不到 llama-server 可执行文件, 请先进行编译")
@@ -33,8 +34,8 @@ class LlamaServerWrapper:
         self.host = host
         self.port = port
         self.log_to_file = log_to_file
+        self.enable_counter = enable_counter
 
-        self.moe_counter = os.getenv("LLAMA_MOE_COUNTER") == "1"
         self.process: Optional[subprocess.Popen] = None
         self._log_file = None
         self.log_path = self.work_dir / "llama-server.log"
@@ -51,7 +52,7 @@ class LlamaServerWrapper:
 
         env = os.environ.copy()
         env["WORK_DIR"] = str(self.work_dir)
-        env["LLAMA_MOE_COUNTER"] = "1" if self.moe_counter else "0"
+        env["LLAMA_MOE_COUNTER"] = "1" if self.enable_counter else "0"
 
         popen_kwargs = dict(
             text=True,
