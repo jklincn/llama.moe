@@ -78,8 +78,12 @@ def run(args, other):
     reader = GGUFReader(model)
     ot_args = get_override_rules(reader, ctx_size, kv_offload)
 
-    numa_result = check_numa(model)
-    numactl_cmd, numa_args = numa_result if numa_result else (None, [])
+    if args.disable_numa:
+        logger.info("已禁用 NUMA：将不使用 numactl 启动 llama-server")
+        numactl_cmd, numa_args = None, []
+    else:
+        numa_result = check_numa(model)
+        numactl_cmd, numa_args = numa_result if numa_result else (None, [])
 
     if "--metrics" not in other:
         other.append("--metrics")
