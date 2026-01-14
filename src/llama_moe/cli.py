@@ -8,7 +8,7 @@ from .core import run
 
 
 def setup_logging():
-    LOG_FORMAT = "[%(asctime)s] [%(levelname)s] [%(name)s] %(message)s"
+    LOG_FORMAT = "[%(asctime)s][%(levelname)s][%(name)s] %(message)s"
     DATEFMT = "%Y-%m-%d %H:%M:%S"
     logging.basicConfig(handlers=[], force=True)
     handler = logging.StreamHandler(stream=sys.stdout)

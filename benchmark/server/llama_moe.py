@@ -53,9 +53,13 @@ class LlamaMoeServerHandler(ServerHandler):
                         process.terminate()
                         try:
                             process.wait(timeout=20)
-                            print(f"Successfully terminated process {conn.pid} occupying port {port}")
+                            print(
+                                f"Successfully terminated process {conn.pid} occupying port {port}"
+                            )
                         except psutil.TimeoutExpired:
-                            print(f"Process {conn.pid} did not exit within 20 seconds, using SIGKILL")
+                            print(
+                                f"Process {conn.pid} did not exit within 20 seconds, using SIGKILL"
+                            )
                             process.kill()
                             process.wait(timeout=5)
                             print(f"Process {conn.pid} was forcibly terminated")
@@ -63,14 +67,13 @@ class LlamaMoeServerHandler(ServerHandler):
                         print(f"Error terminating process {conn.pid}: {e}")
         except Exception as e:
             print(f"Error cleaning up port {port}: {e}")
+
     def _wait_for_ready(
         self,
-        url: str = "http://127.0.0.1:8080/health",
+        url: str = "http://127.0.0.1:8080/v1/models",
         timeout_sec: int = 600,
         interval_sec: float = 2.0,
     ) -> bool:
-        url = "http://127.0.0.1:8080/v1/models"
-
         deadline = time.time() + timeout_sec
         while time.time() < deadline:
             if self.process is not None and self.process.poll() is not None:
@@ -151,7 +154,9 @@ class LlamaMoeServerHandler(ServerHandler):
                     process.wait(timeout=20)
                     print("Server exited normally")
                 except psutil.TimeoutExpired:
-                    print(f"Process {self.process.pid} did not exit within 20 seconds, using SIGKILL")
+                    print(
+                        f"Process {self.process.pid} did not exit within 20 seconds, using SIGKILL"
+                    )
                     process.kill()
                     process.wait(timeout=5)
                     print("Process was forcibly terminated")

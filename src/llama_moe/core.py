@@ -58,7 +58,7 @@ def check_model(model_path: str):
         msg = "当前仅支持单文件 GGUF 模型，可以参考 scripts/gguf_merge.sh 进行合并"
         logger.error(msg)
         raise ValueError(msg)
-    print(f"使用模型: {model_path}")
+    logger.info(f"使用模型: {model_path}")
 
 
 def run(args, other):
