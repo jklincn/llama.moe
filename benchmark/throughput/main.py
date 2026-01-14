@@ -1,10 +1,14 @@
 import time
+
 import openai
 
+from benchmark.server import (
+    FastLLMServerHandler,
+    LlamaCppServerHandler,
+    LlamaMoeServerHandler,
+)
+
 from .dataset import get_prompts
-from .fastllm import FastLLMServerHandler
-from .llama_cpp import LlamaCppServerHandler
-from .llama_moe import LlamaMoeServerHandler
 
 
 def run_benchmark(server_name: str, model_name: str, count=100):
@@ -68,15 +72,10 @@ def run_benchmark(server_name: str, model_name: str, count=100):
     client = openai.OpenAI(base_url=base_url, api_key=api_key)
 
     try:
-        print(f"Connecting to server at {base_url}...")
         models_list = client.models.list()
         if not models_list.data:
             raise ValueError("No models found on the server.")
-
-        # We might want to use the model_name passed in, or the one reported by server
-        # Usually they match or are aliases.
         target_model_id = models_list.data[0].id
-        print(f"Server reported model ID: {target_model_id}")
 
     except Exception as e:
         print(f"Connection error: {e}")
@@ -249,13 +248,13 @@ if __name__ == "__main__":
 
     models = [
         "Qwen3-Next-80B-A3B-Instruct",
-        "GLM-4.5-Air",
-        "Qwen3-235B-A22B",
+        # "GLM-4.5-Air",
+        # "Qwen3-235B-A22B",
     ]
 
     servers = [
-        "llama-cpp",
-        "fastllm",
+        # "llama-cpp",
+        # "fastllm",
         "llama-moe",
     ]
 
