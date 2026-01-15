@@ -1,4 +1,5 @@
 import os
+import signal
 import time
 from datetime import datetime
 from pathlib import Path
@@ -42,7 +43,7 @@ class LlamaCppServerHandler(ServerHandler):
 
     def get_server_name(self) -> str:
         return "llama.cpp"
-    
+
     def _kill_process_on_port(self, port: int):
         """杀死占用指定端口的进程"""
         try:
@@ -56,9 +57,13 @@ class LlamaCppServerHandler(ServerHandler):
                         process.terminate()
                         try:
                             process.wait(timeout=20)
-                            print(f"Successfully terminated process {conn.pid} occupying port {port}")
+                            print(
+                                f"Successfully terminated process {conn.pid} occupying port {port}"
+                            )
                         except psutil.TimeoutExpired:
-                            print(f"Process {conn.pid} did not exit within 20 seconds, using SIGKILL")
+                            print(
+                                f"Process {conn.pid} did not exit within 20 seconds, using SIGKILL"
+                            )
                             process.kill()
                             process.wait(timeout=5)
                             print(f"Process {conn.pid} was forcibly terminated")
@@ -66,6 +71,7 @@ class LlamaCppServerHandler(ServerHandler):
                         print(f"Error terminating process {conn.pid}: {e}")
         except Exception as e:
             print(f"Error cleaning up port {port}: {e}")
+
     def _wait_for_ready(
         self,
         url: str = "http://127.0.0.1:8080/health",
@@ -93,7 +99,6 @@ class LlamaCppServerHandler(ServerHandler):
         return False
 
     def start_server(self):
-
         self._kill_process_on_port(self.port)
         time.sleep(1)
 
@@ -149,24 +154,25 @@ class LlamaCppServerHandler(ServerHandler):
             raise RuntimeError(f"llama-server failed to start for {self.model_name}")
 
     def stop_server(self):
-        """停止服务器进程"""
+        """停止服务器进程（Linux：仅发送 Ctrl+C / SIGINT）"""
         if self.process and self.process.poll() is None:
-            print(f"Stoping llama-server (PID: {self.process.pid})...")
+            pid = self.process.pid
+            print(f"Stopping llama-server (PID: {pid})...")
+
             try:
-                process = psutil.Process(self.process.pid)
-                process.terminate()
+                pgid = os.getpgid(pid)
+
+                print(f"Sending SIGINT (Ctrl+C) to process group {pgid}...")
                 try:
-                    process.wait(timeout=20)
-                    print("Process exited normally")
-                except psutil.TimeoutExpired:
-                    print(f"Process {self.process.pid} did not exit within 20 seconds, using SIGKILL")
-                    process.kill()
-                    process.wait(timeout=5)
-                    print("Process was forcibly terminated")
-            except (psutil.NoSuchProcess, psutil.AccessDenied) as e:
-                print(f"Error terminating process: {e}")
+                    os.killpg(pgid, signal.SIGINT)
+                except ProcessLookupError:
+                    print("Process group not found (already exited).")
+                except Exception as e:
+                    print(f"Failed to send SIGINT: {e}")
+
             except Exception as e:
                 print(f"Error stopping server: {e}")
+
         self.process = None
 
         if self.log_f:

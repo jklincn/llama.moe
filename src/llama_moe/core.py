@@ -183,7 +183,6 @@ def run(args, other):
 
             break  # 正常退出循环
         except KeyboardInterrupt:
-            print("\n")
             logger.info("正在关闭...")
             break
         finally:

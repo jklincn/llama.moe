@@ -1,4 +1,5 @@
 import os
+import signal
 import time
 import psutil
 from datetime import datetime
@@ -148,26 +149,24 @@ class LlamaMoeServerHandler(ServerHandler):
             raise RuntimeError(f"llama-moe failed to start for {self.model_name}")
 
     def stop_server(self):
-        """停止服务器进程"""
         if self.process and self.process.poll() is None:
-            print(f"Stoping llama-moe (PID: {self.process.pid})...")
+            pid = self.process.pid
+            print(f"Stopping llama-moe (PID: {pid})...")
+
             try:
-                process = psutil.Process(self.process.pid)
-                process.terminate()
+                pgid = os.getpgid(pid)
+                print(f"Sending SIGINT to process group {pgid} (Ctrl+C)...")
+
                 try:
-                    process.wait(timeout=20)
-                    print("Server exited normally")
-                except psutil.TimeoutExpired:
-                    print(
-                        f"Process {self.process.pid} did not exit within 20 seconds, using SIGKILL"
-                    )
-                    process.kill()
-                    process.wait(timeout=5)
-                    print("Process was forcibly terminated")
-            except (psutil.NoSuchProcess, psutil.AccessDenied) as e:
-                print(f"Error terminating process: {e}")
+                    os.killpg(pgid, signal.SIGINT)
+                except ProcessLookupError:
+                    print("Process group not found (already exited).")
+                except Exception as e:
+                    print(f"Failed to send SIGINT: {e}")
+
             except Exception as e:
                 print(f"Error stopping server: {e}")
+
         self.process = None
 
         if self.log_f:
