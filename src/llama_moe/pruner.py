@@ -1,9 +1,11 @@
 import argparse
 import csv
+import math
 from pathlib import Path
-import numpy as np
 from typing import Dict, List
-from gguf import GGUFReader, GGUFWriter, GGUFValueType, Keys
+
+import numpy as np
+from gguf import GGUFReader, GGUFValueType, GGUFWriter, Keys
 
 from .utils.gguf import detect_arch
 
@@ -24,12 +26,12 @@ def resolve_report_paths(report_dir: str) -> tuple[str, str]:
 def read_csv_data(csv_path: str) -> Dict[int, Dict[int, float]]:
     """读取 CSV 数据到字典结构 {layer_idx: {expert_idx: value}}"""
     print(f"Loading data from {csv_path}...")
-    data = {}
+    data: Dict[int, Dict[int, float]] = {}
     with open(csv_path, "r") as f:
         reader = csv.DictReader(f)
         for row in reader:
             layer_idx = int(row["layer_index"])
-            layer_data = {}
+            layer_data: Dict[int, float] = {}
             for k, v in row.items():
                 if k.startswith("expert_"):
                     exp_id = int(k.split("_")[1])
@@ -39,45 +41,105 @@ def read_csv_data(csv_path: str) -> Dict[int, Dict[int, float]]:
 
 
 def normalize_layer_data(layer_data: Dict[int, float]) -> Dict[int, float]:
-    """归一化一层的数据，使其和为 1"""
+    """归一化一层的数据，使其和为 1（若全 0 则全 0）"""
     total = sum(layer_data.values())
     if total == 0:
         return {k: 0.0 for k in layer_data}
     return {k: v / total for k, v in layer_data.items()}
 
 
+def _normalized_entropy(p: Dict[int, float]) -> float:
+    """
+    归一化熵 H(p)/log(K)，范围 [0, 1]（K=专家数，p 已归一化但这里不强依赖）。
+    - 当分布越均匀，熵越高 -> 接近 1
+    - 当分布越尖锐，熵越低 -> 接近 0
+    稳健处理：全 0 返回 1.0（视为“最不尖锐/最不确定”）
+    """
+    K = max(len(p), 1)
+    vals = [v for v in p.values() if v > 0.0]
+    if not vals:
+        return 1.0
+
+    H = 0.0
+    for v in vals:
+        H -= v * math.log(v + 1e-12)
+
+    denom = math.log(K + 1e-12)
+    if denom <= 0:
+        return 1.0
+    return max(0.0, min(1.0, H / denom))
+
+
+def _sharpness(p: Dict[int, float]) -> float:
+    """尖锐度 = 1 - 归一化熵，范围 [0, 1]，越大越尖锐。"""
+    return 1.0 - _normalized_entropy(p)
+
+
+def _auto_alpha_for_layer(c_norm: Dict[int, float], w_norm: Dict[int, float]) -> float:
+    """
+    每层自适应 alpha：
+    alpha = sharpness(counts) / (sharpness(counts) + sharpness(weights) + eps)
+    - counts 越尖锐 -> alpha 越大
+    - weights 越尖锐 -> alpha 越小
+    """
+    sc = _sharpness(c_norm)
+    sw = _sharpness(w_norm)
+    return float(sc / (sc + sw + 1e-12))
+
+
 def compute_hybrid_importance(
-    counts_path: str, weights_path: str, alpha: float = 0.2
+    counts_path: str,
+    weights_path: str,
+    total_experts: int | None = None,
+    verbose_alpha: bool = True,
 ) -> Dict[int, Dict[int, float]]:
     """
-    计算混合重要性分数。
-    alpha: 计数分数的权重 (0.0 - 1.0)。
-           0.0 = 仅使用权重
-           1.0 = 仅使用计数
+    计算混合重要性分数，每层自适应 alpha
+    若 total_experts 给定，会补齐缺失专家为 0，以保证熵/尖锐度估计更稳定。
     """
     counts_data = read_csv_data(counts_path)
     weights_data = read_csv_data(weights_path)
 
-    # 混合计算
-    hybrid_data = {}
+    hybrid_data: Dict[int, Dict[int, float]] = {}
     all_layers = set(counts_data.keys()) | set(weights_data.keys())
 
-    for layer in all_layers:
-        c_layer = counts_data.get(layer, {})
-        w_layer = weights_data.get(layer, {})
+    for layer in sorted(all_layers):
+        c_layer = dict(counts_data.get(layer, {}))
+        w_layer = dict(weights_data.get(layer, {}))
+
+        # 补齐缺失专家（尤其是“从未激活”导致 counts CSV 没有列/值时）
+        if total_experts is not None:
+            for i in range(total_experts):
+                if i not in c_layer:
+                    c_layer[i] = 0.0
+                if i not in w_layer:
+                    w_layer[i] = 0.0
 
         # 归一化
-        c_norm = normalize_layer_data(c_layer)
-        w_norm = normalize_layer_data(w_layer)
+        c_norm = normalize_layer_data(c_layer) if c_layer else {}
+        w_norm = normalize_layer_data(w_layer) if w_layer else {}
 
+        # 统一专家集合
         all_experts = set(c_norm.keys()) | set(w_norm.keys())
-        hybrid_layer = {}
+        if total_experts is not None:
+            all_experts |= set(range(total_experts))
 
+        # 每层自适应 alpha
+        alpha_layer = _auto_alpha_for_layer(c_norm, w_norm)
+
+        if verbose_alpha:
+            sc = _sharpness(c_norm) if c_norm else 0.0
+            sw = _sharpness(w_norm) if w_norm else 0.0
+            print(
+                f"  Layer {layer}: auto_alpha={alpha_layer:.4f} "
+                f"(sharp_counts={sc:.4f}, sharp_weights={sw:.4f})"
+            )
+
+        hybrid_layer: Dict[int, float] = {}
         for exp in all_experts:
             c_val = c_norm.get(exp, 0.0)
             w_val = w_norm.get(exp, 0.0)
-            # 混合公式
-            score = alpha * c_val + (1.0 - alpha) * w_val
+            score = alpha_layer * c_val + (1.0 - alpha_layer) * w_val
             hybrid_layer[exp] = score
 
         hybrid_data[layer] = hybrid_layer
@@ -88,24 +150,27 @@ def compute_hybrid_importance(
 def load_expert_importance(
     counts_path: str,
     weights_path: str,
-    threshold: float,
+    coverage: float,
     total_experts: int,
-    alpha: float,
 ) -> Dict[int, List[int]]:
     """
     加载并计算专家重要性，返回保留的专家索引列表。
     """
-    importance_data = compute_hybrid_importance(counts_path, weights_path, alpha)
+    importance_data = compute_hybrid_importance(
+        counts_path=counts_path,
+        weights_path=weights_path,
+        total_experts=total_experts,
+        verbose_alpha=True,
+    )
 
-    layer_importance = {}
+    layer_importance: Dict[int, List[int]] = {}
 
     for layer_idx, experts_map in importance_data.items():
         # 转换为列表并排序
         counts = list(experts_map.items())
 
-        # 如果指定了总专家数，检查数量 (仅当数据完整时)
+        # 再保险：补齐缺失专家
         if total_experts is not None and len(counts) < total_experts:
-            # 可能是某些专家从未被激活，补齐 0
             existing_ids = set(x[0] for x in counts)
             for i in range(total_experts):
                 if i not in existing_ids:
@@ -116,11 +181,10 @@ def load_expert_importance(
 
         total_score = sum(x[1] for x in counts)
 
-        keep_indices = []
+        keep_indices: List[int] = []
 
         # Coverage 逻辑
-        target_coverage = threshold
-        current_coverage = 0.0
+        target_coverage = coverage
         current_sum = 0.0
 
         if total_score == 0:
@@ -129,18 +193,21 @@ def load_expert_importance(
             for exp_id, score in counts:
                 keep_indices.append(exp_id)
                 current_sum += score
-                current_coverage = (current_sum / total_score) * 100
+                current_coverage = (current_sum / total_score) * 100.0
                 if current_coverage >= target_coverage:
                     break
 
         # 计算最终覆盖率
-        kept_score = sum(dict(counts)[idx] for idx in keep_indices)
-        coverage = (kept_score / total_score * 100) if total_score > 0 else 0.0
+        score_dict = dict(counts)
+        kept_score = sum(score_dict.get(idx, 0.0) for idx in keep_indices)
+        final_coverage = (kept_score / total_score * 100.0) if total_score > 0 else 0.0
 
         layer_importance[layer_idx] = keep_indices
 
         print(
-            f"  Layer {layer_idx}: keeping {len(keep_indices)}/{len(counts)} ({len(keep_indices) / len(counts) * 100:.2f}%) experts. Score Coverage: {coverage:.2f}%"
+            f"  Layer {layer_idx}: keeping {len(keep_indices)}/{len(counts)} "
+            f"({len(keep_indices) / len(counts) * 100:.2f}%) experts. "
+            f"Score Coverage: {final_coverage:.2f}%"
         )
 
     return layer_importance
@@ -276,8 +343,6 @@ def process_tensors(
 
         # 写入数据
         if tensor.data.dtype == np.uint8:
-            # 注意：不要传递 raw_shape=shape (逻辑形状)，GGUFWriter 期望的是字节形状 (byte shape)
-            # 如果不传递 raw_shape，它会自动使用 data.shape，这正是我们想要的（因为 data 已经是字节数据）
             writer.add_tensor(name, data, raw_dtype=tensor_type)
         else:
             writer.add_tensor(name, data)
@@ -286,9 +351,8 @@ def process_tensors(
 def prune_model_with_report(
     gguf_path: str,
     report_dir: str,
-    threshold: float,
-    alpha: float,
-    output_path: str,
+    coverage: float,
+    output_path: str | None = None,
 ) -> str:
     print(f"Loading {gguf_path}...")
     reader = GGUFReader(gguf_path)
@@ -309,9 +373,8 @@ def prune_model_with_report(
     importance_map = load_expert_importance(
         counts_path=counts_path,
         weights_path=weights_path,
-        threshold=threshold,
+        coverage=coverage,
         total_experts=old_expert_count,
-        alpha=alpha,
     )
 
     # Calculate stats
@@ -327,7 +390,7 @@ def prune_model_with_report(
 
     if output_path is None:
         p = Path(gguf_path)
-        suffix_val = f"cov{int(threshold)}"
+        suffix_val = f"cov{int(coverage)}"
         output_path = str(p.with_name(f"{p.stem}-pruned_{suffix_val}{p.suffix}"))
 
     writer = GGUFWriter(output_path, arch)
@@ -372,43 +435,26 @@ def prune_model_with_report(
     return output_path
 
 
-# python -m llama_moe.pruner /mnt/data/gguf/Qwen3-Next-80B-A3B-Instruct-Q8_0.gguf --prune-coverage 90 ---report-dir .
+# python -m llama_moe.pruner /mnt/data/gguf/Qwen3-Next-80B-A3B-Instruct-Q8_0.gguf --coverage 90 --report-dir .
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(description="GGUF MoE 裁剪脚本")
     ap.add_argument("gguf_path", help="GGUF 文件路径")
     ap.add_argument(
-        "--prune-coverage",
-        type=float,
-        required=True,
-        help="保留专家直到达到覆盖率 (0-100)",
+        "--coverage", type=float, required=True, help="保留专家直到达到覆盖率 (0-100)"
     )
-
     ap.add_argument(
         "--report-dir",
         type=str,
         default=".",
         help="目录路径，包含 expert_activations.csv 和 expert_weights.csv（默认当前目录）",
     )
-    ap.add_argument(
-        "--alpha",
-        type=float,
-        default=0.2,
-        help="混合评分中计数的权重 (0.0-1.0), 默认 0.2",
-    )
-    ap.add_argument(
-        "--output",
-        "-o",
-        type=str,
-        default=None,
-        help="输出文件路径",
-    )
+    ap.add_argument("--output", "-o", type=str, default=None, help="输出文件路径")
 
     args = ap.parse_args()
 
     prune_model_with_report(
         args.gguf_path,
         args.report_dir,
-        args.prune_coverage,
-        args.alpha,
+        args.coverage,
         args.output,
     )

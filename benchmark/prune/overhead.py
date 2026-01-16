@@ -205,7 +205,7 @@ def print_results_table(results):
     print("\n" + "=" * 60)
 
 
-# python -m benchmark.overhead
+# python -m benchmark.prune.overhead
 if __name__ == "__main__":
     all_results = []
 

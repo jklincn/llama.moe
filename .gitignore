@@ -15,7 +15,7 @@ wheels/
 
 # csv
 *.csv
-!benchmark/accuracy/profiling_reports/**/*.csv
+!benchmark/prune/profiling_reports/**/*.csv
 
 # created by scripts/expert_activation_analysis.py
 expert_activation_heatmap.png

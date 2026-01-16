@@ -88,7 +88,7 @@ def run(args, other):
 
     if enable_counter:
         logger.info("已启用 MoE activation counter")
-        
+
     if "--metrics" not in other:
         other.append("--metrics")
     if os.getenv("LLAMA_MOE_DEBUG") == "1":
@@ -154,25 +154,17 @@ def run(args, other):
                     time.sleep(3)  # 等待激活文件保存
                     # 执行剪枝
                     logger.info("开始执行专家裁剪...")
-                    # 假设 expert_activations.csv 在当前目录
-                    csv_path = "expert_activations.csv"
-                    if os.path.exists(csv_path):
-                        try:
-                            # 使用 coverage 模式进行剪枝
-                            new_model_path = prune_model_with_report(
-                                current_model,
-                                csv_path,
-                                method="coverage",
-                                threshold=args.prune_coverage,
-                            )
-                            current_model = new_model_path
-                            pruning_done = True
-                            logger.info(f"剪枝完成，新模型路径: {current_model}")
-                        except Exception as e:
-                            logger.error(f"剪枝失败: {e}")
-                            break
-                    else:
-                        logger.error("未找到激活报告，无法剪枝")
+                    try:
+                        new_model_path = prune_model_with_report(
+                            current_model,
+                            report_dir=".",
+                            coverage=args.prune_coverage,
+                        )
+                        current_model = new_model_path
+                        pruning_done = True
+                        logger.info(f"剪枝完成，新模型路径: {current_model}")
+                    except Exception as e:
+                        logger.error(f"剪枝失败: {e}")
                         break
 
                     continue  # 重启循环，使用新模型
