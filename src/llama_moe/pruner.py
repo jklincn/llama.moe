@@ -8,6 +8,19 @@ from gguf import GGUFReader, GGUFWriter, GGUFValueType, Keys
 from .utils.gguf import detect_arch
 
 
+def resolve_report_paths(report_dir: str) -> tuple[str, str]:
+    d = Path(report_dir).expanduser().resolve()
+    counts_path = d / "expert_activations.csv"
+    weights_path = d / "expert_weights.csv"
+
+    if not counts_path.exists():
+        raise FileNotFoundError(f"Missing {'expert_activations.csv'} in directory: {d}")
+    if not weights_path.exists():
+        raise FileNotFoundError(f"Missing {'expert_weights.csv'} in directory: {d}")
+
+    return str(counts_path), str(weights_path)
+
+
 def read_csv_data(csv_path: str) -> Dict[int, Dict[int, float]]:
     """读取 CSV 数据到字典结构 {layer_idx: {expert_idx: value}}"""
     print(f"Loading data from {csv_path}...")
@@ -39,8 +52,8 @@ def compute_hybrid_importance(
     """
     计算混合重要性分数。
     alpha: 计数分数的权重 (0.0 - 1.0)。
-           1.0 = 仅使用计数
            0.0 = 仅使用权重
+           1.0 = 仅使用计数
     """
     counts_data = read_csv_data(counts_path)
     weights_data = read_csv_data(weights_path)
@@ -76,8 +89,8 @@ def load_expert_importance(
     counts_path: str,
     weights_path: str,
     threshold: float,
-    total_experts: int = None,
-    alpha: float = 0.2,
+    total_experts: int,
+    alpha: float,
 ) -> Dict[int, List[int]]:
     """
     加载并计算专家重要性，返回保留的专家索引列表。
@@ -127,7 +140,7 @@ def load_expert_importance(
         layer_importance[layer_idx] = keep_indices
 
         print(
-            f"  Layer {layer_idx}: keeping {len(keep_indices)}/{len(counts)} experts. Score Coverage: {coverage:.2f}%"
+            f"  Layer {layer_idx}: keeping {len(keep_indices)}/{len(counts)} ({len(keep_indices) / len(counts) * 100:.2f}%) experts. Score Coverage: {coverage:.2f}%"
         )
 
     return layer_importance
@@ -181,15 +194,11 @@ def reorder_and_prune_data(
     return data
 
 
-def process_metadata(
-    reader: GGUFReader, writer: GGUFWriter, new_expert_count: int = None
-) -> None:
-    # 基本与 gguf_new_metadata.py 的 copy 逻辑一致：跳过 GGUF.* 与 ARCHITECTURE 虚拟键
-    arch = detect_arch(reader)
-
+def process_metadata(reader: GGUFReader, writer: GGUFWriter) -> None:
     # Add pruning flag
     writer.add_bool("llama_moe.is_pruned", True)
 
+    # copy other metadata
     for field in reader.fields.values():
         if field.name == Keys.General.ARCHITECTURE or field.name.startswith("GGUF."):
             continue
@@ -201,18 +210,6 @@ def process_metadata(
             if field.types and field.types[0] == GGUFValueType.ARRAY
             else None
         )
-
-        if new_expert_count is not None and field.name == f"{arch}.expert_count":
-            print(f"  [Metadata] Updating {field.name}: {val} -> {new_expert_count}")
-            val = new_expert_count
-
-        # 确保 expert_used_count 不超过新的 expert_count
-        if new_expert_count is not None and field.name == f"{arch}.expert_used_count":
-            if int(val) > new_expert_count:
-                print(
-                    f"  [Metadata] Updating {field.name}: {val} -> {new_expert_count}"
-                )
-                val = new_expert_count
 
         if val_type is not None:
             writer.add_key_value(field.name, val, val_type, sub_type=sub_type)
@@ -288,11 +285,10 @@ def process_tensors(
 
 def prune_model_with_report(
     gguf_path: str,
-    counts_path: str,
-    weights_path: str,
+    report_dir: str,
     threshold: float,
     alpha: float,
-    output_path: str = None,
+    output_path: str,
 ) -> str:
     print(f"Loading {gguf_path}...")
     reader = GGUFReader(gguf_path)
@@ -307,6 +303,8 @@ def prune_model_with_report(
     print(
         f"Detected architecture: {arch}, Expert Count: {old_expert_count}, Layers: {num_layers}"
     )
+
+    counts_path, weights_path = resolve_report_paths(report_dir)
 
     importance_map = load_expert_importance(
         counts_path=counts_path,
@@ -327,15 +325,6 @@ def prune_model_with_report(
 
     total_pruned_experts = total_original_experts - total_kept_experts
 
-    print(f"Total Original Experts: {total_original_experts}")
-    print(f"Total Kept Experts:     {total_kept_experts}")
-    print(f"Total Pruned Experts:   {total_pruned_experts}")
-
-    # Determine max experts kept to update metadata (though layers may vary)
-    max_kept_experts = 0
-    if importance_map:
-        max_kept_experts = max(len(indices) for indices in importance_map.values())
-
     if output_path is None:
         p = Path(gguf_path)
         suffix_val = f"cov{int(threshold)}"
@@ -348,7 +337,7 @@ def prune_model_with_report(
     writer.add_uint64("llama_moe.original_experts_count", total_original_experts)
 
     print("Processing metadata...")
-    process_metadata(reader, writer, max_kept_experts)
+    process_metadata(reader, writer)
 
     print("Processing tensors...")
     process_tensors(reader, writer, old_expert_count, importance_map)
@@ -358,12 +347,32 @@ def prune_model_with_report(
     writer.write_kv_data_to_file()
     writer.write_tensors_to_file()
     writer.close()
+
+    try:
+        before_size = Path(gguf_path).stat().st_size
+        after_size = Path(output_path).stat().st_size
+        if before_size > 0:
+            reduced_pct = (1.0 - (after_size / before_size)) * 100.0
+        else:
+            reduced_pct = 0.0
+
+        GIB = 1024**3
+
+        print(
+            "File size: "
+            f"{before_size / GIB:.2f} GiB -> "
+            f"{after_size / GIB:.2f} GiB, "
+            f"reduced {reduced_pct:.2f}%"
+        )
+    except OSError as e:
+        print(f"File size: unavailable ({e})")
+
     print("Done.")
     print(f"Output path: {output_path}")
     return output_path
 
 
-# python -m llama_moe.pruner /mnt/data/gguf/GLM-4.5-Air-Q8_0.gguf --prune-coverage 90 --activation-report expert_activations.csv --activation-weights expert_weights.csv
+# python -m llama_moe.pruner /mnt/data/gguf/Qwen3-Next-80B-A3B-Instruct-Q8_0.gguf --prune-coverage 90 ---report-dir .
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(description="GGUF MoE 裁剪脚本")
     ap.add_argument("gguf_path", help="GGUF 文件路径")
@@ -375,19 +384,13 @@ if __name__ == "__main__":
     )
 
     ap.add_argument(
-        "--activation-report",
+        "--report-dir",
         type=str,
-        required=True,
-        help="expert_activations.csv 路径 (计数)",
+        default=".",
+        help="目录路径，包含 expert_activations.csv 和 expert_weights.csv（默认当前目录）",
     )
     ap.add_argument(
-        "--activation-weights",
-        type=str,
-        required=True,
-        help="expert_weights.csv 路径 (权重)",
-    )
-    ap.add_argument(
-        "--count-weight",
+        "--alpha",
         type=float,
         default=0.2,
         help="混合评分中计数的权重 (0.0-1.0), 默认 0.2",
@@ -404,9 +407,8 @@ if __name__ == "__main__":
 
     prune_model_with_report(
         args.gguf_path,
-        args.activation_report,
-        args.activation_weights,
+        args.report_dir,
         args.prune_coverage,
-        args.count_weight,
+        args.alpha,
         args.output,
     )

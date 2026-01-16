@@ -15,9 +15,13 @@ wheels/
 
 # csv
 *.csv
+!benchmark/accuracy/profiling_reports/**/*.csv
 
 # created by scripts/expert_activation_analysis.py
 expert_activation_heatmap.png
 
 # created by tests/throughput.py
 tests/results*
+
+# created by evalscope
+outputs/

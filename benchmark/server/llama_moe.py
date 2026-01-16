@@ -124,7 +124,7 @@ class LlamaMoeServerHandler(ServerHandler):
 
         print("Starting llama-moe with command:")
         print(" ".join(cmd))
-        print(f"Redirecting logs to: {log_path}")
+        print(f"\033[32mRedirecting logs to: {log_path}\033[0m")
 
         os.makedirs(self.log_dir, exist_ok=True)
         self.log_f = open(log_path, "a", buffering=1, encoding="utf-8")

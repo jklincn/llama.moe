@@ -87,13 +87,6 @@ def run_benchmark(server_name: str, model_name: str, count=100):
     top_k = 1
     max_tokens = 128
 
-    # print("\nBenchmark Configuration:")
-    # print(f"  Framework:   {server_name}")
-    # print(f"  Model:       {model_name}")
-    # print(f"  Temperature: {temperature}")
-    # print(f"  Top-P:       {top_p}")
-    # print(f"  Top-K:       {top_k}")
-    # print(f"  Max Tokens:  {max_tokens}")
     print("Running benchmark...")
 
     failed_requests = 0
