@@ -7,6 +7,7 @@ from subprocess import Popen
 import requests
 from modelscope.hub.snapshot_download import snapshot_download
 from .server_handler import ServerHandler
+from ..utils.port import kill_process_on_port
 
 model_list = {
     "Qwen3-Next-80B-A3B-Instruct": {
@@ -28,14 +29,16 @@ model_list = {
 
 
 class FastLLMServerHandler(ServerHandler):
-    def __init__(self, model_name: str, log_dir: str = "./logs"):
+    def __init__(
+        self, model_name: str, log_dir: str = "./logs", args: list[str] = None
+    ):
         if model_name not in model_list:
             raise ValueError(f"Model {model_name} not found in model_list")
         self.model_name = model_name
         self.model_info = model_list[model_name]
         self.log_dir = log_dir
         self.port = 8080
-
+        self.args = args if args is not None else []
         self.process = None
         self.log_f = None
 
@@ -47,27 +50,6 @@ class FastLLMServerHandler(ServerHandler):
     def get_server_name(self) -> str:
         return "FastLLM"
 
-    def _kill_process_on_port(self, port: int):
-        """杀死占用指定端口的进程"""
-        try:
-            for conn in psutil.net_connections():
-                if conn.laddr.port == port and conn.status == 'LISTEN':
-                    try:
-                        process = psutil.Process(conn.pid)
-                        print(f"Found process occupying port {port}: PID={conn.pid}, name={process.name()}")
-                        process.terminate()
-                        try:
-                            process.wait(timeout=20)
-                            print(f"Successfully terminated process {conn.pid} occupying port {port}")
-                        except psutil.TimeoutExpired:
-                            print(f"Process {conn.pid} did not exit within 20 seconds, using SIGKILL")
-                            process.kill()
-                            process.wait(timeout=5)
-                            print(f"Process {conn.pid} was forcibly terminated")
-                    except (psutil.NoSuchProcess, psutil.AccessDenied) as e:
-                        print(f"Error terminating process {conn.pid}: {e}")
-        except Exception as e:
-            print(f"Error cleaning up port {port}: {e}")
     def _get_ori(self, hf_path: str) -> str:
         model_dir = snapshot_download(
             hf_path,
@@ -101,8 +83,7 @@ class FastLLMServerHandler(ServerHandler):
         return False
 
     def start_server(self):
-
-        self._kill_process_on_port(self.port)
+        kill_process_on_port(self.port)
         time.sleep(1)  # 等待端口释放
 
         cmd = ["ftllm", "server", self.model_info["path"]]
@@ -115,6 +96,8 @@ class FastLLMServerHandler(ServerHandler):
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
         safe_name = self.model_name.replace("/", "_")
         log_path = os.path.join(self.log_dir, f"ftllm_{safe_name}_{ts}.log")
+
+        cmd += self.args
 
         print("Starting FastLLM server with command:")
         print(" ".join(cmd))
@@ -155,7 +138,9 @@ class FastLLMServerHandler(ServerHandler):
                     process.wait(timeout=20)
                     print("Server exited normally")
                 except psutil.TimeoutExpired:
-                    print(f"Process {self.process.pid} did not exit within 20 seconds, using SIGKILL")
+                    print(
+                        f"Process {self.process.pid} did not exit within 20 seconds, using SIGKILL"
+                    )
                     process.kill()
                     process.wait(timeout=5)
                     print("Process was forcibly terminated")
@@ -163,7 +148,7 @@ class FastLLMServerHandler(ServerHandler):
                 print(f"Error terminating process: {e}")
             except Exception as e:
                 print(f"Error stopping server: {e}")
-        
+
         self.process = None
 
         if self.log_f:

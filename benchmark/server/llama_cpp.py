@@ -5,9 +5,9 @@ from datetime import datetime
 from pathlib import Path
 from subprocess import Popen
 
-import psutil
 import requests
 from .server_handler import ServerHandler
+from ..utils.port import kill_process_on_port
 
 model_list = {
     "Qwen3-Next-80B-A3B-Instruct": {
@@ -26,7 +26,13 @@ model_list = {
 
 
 class LlamaCppServerHandler(ServerHandler):
-    def __init__(self, model_name: str, log_dir: str = "./logs"):
+    def __init__(
+        self,
+        model_name: str,
+        log_dir: str = "./logs",
+        ctx_size: int = 4096,
+        args: list[str] = None,
+    ):
         if model_name not in model_list:
             raise ValueError(f"Model {model_name} not found in model_list")
         self.model_name = model_name
@@ -35,6 +41,8 @@ class LlamaCppServerHandler(ServerHandler):
         self.process = None
         self.log_f = None
         self.port = 8080
+        self.ctx_size = ctx_size
+        self.args = args if args is not None else []
 
         # Statistics
         self.success_count = 0
@@ -43,34 +51,6 @@ class LlamaCppServerHandler(ServerHandler):
 
     def get_server_name(self) -> str:
         return "llama.cpp"
-
-    def _kill_process_on_port(self, port: int):
-        """杀死占用指定端口的进程"""
-        try:
-            for conn in psutil.net_connections():
-                if conn.laddr.port == port and conn.status == "LISTEN":
-                    try:
-                        process = psutil.Process(conn.pid)
-                        print(
-                            f"Found process occupying port {port}: PID={conn.pid}, name={process.name()}"
-                        )
-                        process.terminate()
-                        try:
-                            process.wait(timeout=20)
-                            print(
-                                f"Successfully terminated process {conn.pid} occupying port {port}"
-                            )
-                        except psutil.TimeoutExpired:
-                            print(
-                                f"Process {conn.pid} did not exit within 20 seconds, using SIGKILL"
-                            )
-                            process.kill()
-                            process.wait(timeout=5)
-                            print(f"Process {conn.pid} was forcibly terminated")
-                    except (psutil.NoSuchProcess, psutil.AccessDenied) as e:
-                        print(f"Error terminating process {conn.pid}: {e}")
-        except Exception as e:
-            print(f"Error cleaning up port {port}: {e}")
 
     def _wait_for_ready(
         self,
@@ -99,7 +79,7 @@ class LlamaCppServerHandler(ServerHandler):
         return False
 
     def start_server(self):
-        self._kill_process_on_port(self.port)
+        kill_process_on_port(self.port)
         time.sleep(1)
 
         # Locate llama-server binary
@@ -117,10 +97,10 @@ class LlamaCppServerHandler(ServerHandler):
             str(server_bin),
             "--model", model_path,
             "--api-key", "sk-1234",
-            "--ctx-size", "4096",
+            "--ctx-size", str(self.ctx_size),
             "--n-gpu-layers", str(n_gpu_layers),
             "--seed", "0",
-        ]
+        ] + self.args
         # fmt: on
 
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")

@@ -10,7 +10,7 @@ from benchmark.server import (
 )
 
 
-def run_benchmark(server_name: str, model_name: str, count=100):
+def run_benchmark(server_name: str, model_name: str, max_tokens=128, count=100):
     """
     运行单次基准测试并返回结果
 
@@ -41,13 +41,17 @@ def run_benchmark(server_name: str, model_name: str, count=100):
             return None
     elif server_name == "llama-cpp":
         try:
-            handler = LlamaCppServerHandler(model_name, log_dir="./logs")
+            handler = LlamaCppServerHandler(
+                model_name, log_dir="./logs", ctx_size=max_tokens, args=["--ignore-eos"]
+            )
         except ValueError as e:
             print(f"Error: {e}")
             return None
     elif server_name == "llama-moe":
         try:
-            handler = LlamaMoeServerHandler(model_name, log_dir="./logs")
+            handler = LlamaMoeServerHandler(
+                model_name, log_dir="./logs", ctx_size=max_tokens, args=["--ignore-eos"]
+            )
         except ValueError as e:
             print(f"Error: {e}")
             return None
@@ -85,11 +89,21 @@ def run_benchmark(server_name: str, model_name: str, count=100):
     temperature = 0.0
     top_p = 1.0
     top_k = 1
-    max_tokens = 128
+
+    print("Warm up...")
+
+    messages = [{"role": "user", "content": "Hello."}]
+
+    client.chat.completions.create(
+        model=target_model_id,
+        messages=messages,
+        temperature=temperature,
+        top_p=top_p,
+        extra_body={"top_k": top_k},
+        stream=True,
+    )
 
     print("Running benchmark...")
-
-    failed_requests = 0
 
     try:
         for prompt in prompts:
@@ -165,22 +179,11 @@ def run_benchmark(server_name: str, model_name: str, count=100):
 
             except Exception as e:
                 print(f"Request failed: {e}")
-                failed_requests += 1
 
     except KeyboardInterrupt:
         print("\nBenchmark interrupted.")
     finally:
         tps = handler.get_result()
-
-        # 6. Report Results
-        # print("Benchmark Results Summary:")
-        # print(f"Total Requests:           {total_requests}")
-        # print(f"Failed:                   {failed_requests}")
-        # print(f"Wall Time Elapsed:        {wall_time_s:.2f} s")
-        # print("-" * 60)
-
-        # print(f"Average Decode Throughput: {tps:.2f} tokens/s")
-        # print("-" * 60)
 
         # 保存结果
         result = {
@@ -233,14 +236,14 @@ def print_results_table(results):
     print("\n" + "=" * 60)
 
 
-# python -m benchmark.throughput
+# python -m benchmark.offload.throughput
 if __name__ == "__main__":
     # 存储所有测试结果
     all_results = []
 
     models = [
         "Qwen3-Next-80B-A3B-Instruct",
-        "GLM-4.5-Air",
+        # "GLM-4.5-Air",
         # "Qwen3-235B-A22B",
     ]
 
@@ -250,6 +253,7 @@ if __name__ == "__main__":
         "llama-moe",
     ]
 
+    max_tokens = 2048
     count = 2
 
     total_tests = len(models) * len(servers)
@@ -262,7 +266,7 @@ if __name__ == "__main__":
             print(f"TEST {current_test}/{total_tests}: {server} - {model}")
             print("=" * 60 + "\n")
 
-            result = run_benchmark(server, model, count)
+            result = run_benchmark(server, model, max_tokens, count)
 
             if result is not None:
                 all_results.append(result)

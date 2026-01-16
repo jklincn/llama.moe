@@ -13,6 +13,7 @@ dir=$(cd $(dirname "$0") && pwd)
 server="$dir/../llama.cpp/build/bin/llama-server"
 $server --model $model \
     --seed 0 \
-    --ctx-size 4096 \
+    --ctx-size 30 \
     --api-key sk-1234 \
-    --n-gpu-layers 14
+    --n-gpu-layers 14 \
+    --ignore-eos

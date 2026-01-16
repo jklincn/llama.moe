@@ -48,6 +48,8 @@ class LlamaServerWrapper:
         if self.numactl:
             cmd = self.numactl + cmd
 
+        logger.debug(f"启动命令: {' '.join(cmd)}")
+
         self.work_dir.mkdir(parents=True, exist_ok=True)
 
         env = os.environ.copy()
