@@ -391,7 +391,7 @@ def prune_model_with_report(
     if output_path is None:
         p = Path(gguf_path)
         suffix_val = f"cov{int(coverage)}"
-        output_path = str(p.with_name(f"{p.stem}-pruned_{suffix_val}{p.suffix}"))
+        output_path = str(p.with_name(f"{p.stem}-pruned_code_{suffix_val}{p.suffix}"))
 
     writer = GGUFWriter(output_path, arch)
 
@@ -435,7 +435,7 @@ def prune_model_with_report(
     return output_path
 
 
-# python -m llama_moe.pruner /mnt/data/gguf/Qwen3-Next-80B-A3B-Instruct-Q8_0.gguf --coverage 90 --report-dir .
+# python -m llama_moe.pruner /mnt/data/gguf/Qwen3-Next-80B-A3B-Instruct-Q8_0.gguf --report-dir . --coverage 90
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(description="GGUF MoE 裁剪脚本")
     ap.add_argument("gguf_path", help="GGUF 文件路径")

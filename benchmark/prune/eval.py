@@ -9,7 +9,7 @@ from benchmark.server import LlamaMoeServerHandler
 
 
 def run_eval(model: str, dataset: list[str], limit: int | None = None):
-    handler = LlamaMoeServerHandler(model, args=["--enable-counter"])
+    handler = LlamaMoeServerHandler(model, ctx_size=4096, args=["--enable-counter"])
 
     print("=" * 80)
     print(f"模型: {model}")
@@ -58,6 +58,8 @@ def run_eval(model: str, dataset: list[str], limit: int | None = None):
         },
         limit=limit,
         use_cache=str(output_dir),
+        use_sandbox=True,
+        judge_worker_num=5,
     )
 
     print(f"输出目录(use_cache): {output_dir}")
@@ -76,11 +78,11 @@ def run_eval(model: str, dataset: list[str], limit: int | None = None):
         handler.stop_server()
 
 
-# python -m benchmark.accuracy.eval
+# python -m benchmark.prune.eval
 if __name__ == "__main__":
     models = [
-        "Qwen3-Next-80B-A3B-Instruct",
-        # "GLM-4.5-Air",
+        # "Qwen3-Next-80B-A3B-Instruct",
+        "GLM-4.5-Air",
         # "Qwen3-235B-A22B",
     ]
 

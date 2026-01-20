@@ -12,10 +12,10 @@ set -euo pipefail
 
 export LLAMA_MOE_DEBUG=0
 
-model="/mnt/data/gguf/Qwen3-Next-80B-A3B-Instruct-Q8_0-pruned_cov98.gguf"
+model="/mnt/data/gguf/GLM-4.5-Air-Q4_K_M-pruned_code_cov90.gguf"
 
 llama-moe --model $model \
     --seed 0 \
-    --ctx-size 30 \
+    --ctx-size 4096 \
     --api-key sk-1234 \
-    --ignore-eos
+    --no-log-file

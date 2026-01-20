@@ -11,7 +11,7 @@ dependencies = [
 
 [dependency-groups]
 dev = [
-    "evalscope>=0.17.1",
+    "evalscope[sandbox]>=0.17.1",
     "matplotlib>=3.10.5",
     "modelscope>=1.29.2",
     "numpy<2",

@@ -57,7 +57,20 @@ def run_benchmark(
     temperature = 0.0
     top_p = 1.0
     top_k = 1
-    max_tokens = 128
+    max_tokens = 512
+
+    print("Warm up...")
+
+    messages = [{"role": "user", "content": "Hello."}]
+
+    client.chat.completions.create(
+        model=target_model_id,
+        messages=messages,
+        temperature=temperature,
+        top_p=top_p,
+        extra_body={"top_k": top_k},
+        stream=True,
+    )
 
     print("Running benchmark...")
 
@@ -193,7 +206,7 @@ def print_results_table(results):
     print("\n" + "=" * 60)
 
 
-# python -m benchmark.prune.overhead
+# python -m benchmark.offload.numa
 if __name__ == "__main__":
     all_results = []
 
@@ -205,8 +218,8 @@ if __name__ == "__main__":
 
     # fmt: off
     servers = [
-        {"name": "llama-moe", "label": "llama-moe", "args": []},
-        {"name": "llama-moe", "label": "llama-moe+counter", "args": ["--enable-counter"]},
+        {"name": "llama-moe", "label": "llama-moe", "args": ["--ignore-eos", "--disable-numa"]},
+        {"name": "llama-moe", "label": "llama-moe+numa", "args": ["--ignore-eos"]},
     ]
     # fmt: on
 
