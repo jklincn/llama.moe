@@ -7,7 +7,12 @@ from benchmark.server import LlamaMoeServerHandler
 
 
 def run_benchmark(
-    server_name: str, model_name: str, count=100, server_args=None, server_label=None
+    server_name: str,
+    model_name: str,
+    count=100,
+    max_tokens=512,
+    server_args=None,
+    server_label=None,
 ):
     server_args = server_args or []
     framework_label = server_label or server_name
@@ -29,7 +34,9 @@ def run_benchmark(
     # 2. Initialize Handler
     print(f"Initializing handler for {framework_label} with model {model_name}...")
 
-    handler = LlamaMoeServerHandler(model_name, log_dir="./logs", args=server_args)
+    handler = LlamaMoeServerHandler(
+        model_name, log_dir="./logs", ctx_size=max_tokens, args=server_args
+    )
 
     # 3. Start Server
     try:
@@ -57,7 +64,6 @@ def run_benchmark(
     temperature = 0.0
     top_p = 1.0
     top_k = 1
-    max_tokens = 512
 
     print("Warm up...")
 
@@ -81,71 +87,18 @@ def run_benchmark(
             messages = [{"role": "user", "content": prompt}]
 
             try:
-                req_start = time.time()
+                completion = client.chat.completions.create(
+                    model=target_model_id,
+                    messages=messages,
+                    temperature=temperature,
+                    top_p=top_p,
+                    extra_body={"top_k": top_k},
+                    stream=False,
+                    max_tokens=max_tokens,
+                )
+                data = completion.model_dump()
 
-                if server_name == "fastllm":
-                    completion = client.chat.completions.create(
-                        model=target_model_id,
-                        messages=messages,
-                        temperature=temperature,
-                        top_p=top_p,
-                        extra_body={"top_k": top_k},
-                        stream=True,
-                        stream_options={"include_usage": True},
-                        max_tokens=max_tokens,
-                    )
-
-                    first_token_time = None
-                    last_token_time = None
-                    completion_tokens = None
-
-                    for chunk in completion:
-                        # 1) 计时：只要有内容就更新 first/last
-                        if chunk.choices:
-                            delta = chunk.choices[0].delta
-                            if getattr(delta, "content", None):
-                                now = time.time()
-                                if first_token_time is None:
-                                    first_token_time = now
-                                last_token_time = now
-
-                        # 2) 取 token：最后一个 chunk 会带 usage
-                        u = getattr(chunk, "usage", None)
-                        if u is not None:
-                            ct = getattr(u, "completion_tokens", None)
-                            if ct is not None:
-                                completion_tokens = int(ct)
-
-                    # 3) 汇总
-                    if (
-                        completion_tokens
-                        and first_token_time
-                        and last_token_time
-                        and last_token_time > first_token_time
-                    ):
-                        decode_duration = last_token_time - first_token_time
-                        data = {
-                            "usage": {"completion_tokens": max(0, completion_tokens)}
-                        }
-                        handler.handle_result(data, decode_duration)
-
-                else:
-                    # For others (llama-cpp or llama-moe), use server-supplied timings
-                    completion = client.chat.completions.create(
-                        model=target_model_id,
-                        messages=messages,
-                        temperature=temperature,
-                        top_p=top_p,
-                        extra_body={"top_k": top_k},
-                        stream=False,
-                        max_tokens=max_tokens,
-                    )
-
-                    req_duration = time.time() - req_start
-                    data = completion.model_dump()
-
-                    # Delegate to handler for stats accumulation
-                    handler.handle_result(data, req_duration)
+                handler.handle_result(data)
 
             except Exception as e:
                 print(f"Request failed: {e}")
@@ -168,12 +121,6 @@ def run_benchmark(
 
 
 def print_results_table(results):
-    """
-    打印结果汇总表格 - 以模型为分组，显示不同框架的 TPS
-
-    Args:
-        results: 结果列表，每个元素是一个包含测试结果的字典
-    """
     if not results:
         print("No results to display.")
         return
@@ -224,6 +171,7 @@ if __name__ == "__main__":
     # fmt: on
 
     count = 20
+    max_tokens = 2048
 
     total_tests = len(models) * len(servers)
     current_test = 0
@@ -239,6 +187,7 @@ if __name__ == "__main__":
                 s["name"],
                 model,
                 count,
+                max_tokens,
                 server_args=s["args"],
                 server_label=s["label"],
             )

@@ -29,6 +29,8 @@ class LlamaMoeServerHandler(ServerHandler):
         log_dir: str = "./logs",
         ctx_size: int = 4096,
         args: list[str] = None,
+        model_prune_type: str = None,
+        model_prune_coverage: str = None,
     ):
         if model_name not in model_list:
             raise ValueError(f"Model {model_name} not found in model_list")
@@ -40,6 +42,8 @@ class LlamaMoeServerHandler(ServerHandler):
         self.port = 8080
         self.ctx_size = ctx_size
         self.args = args if args is not None else []
+        self.model_prune_type = model_prune_type
+        self.model_prune_coverage = model_prune_coverage
 
         # Statistics
         self.success_count = 0
@@ -83,7 +87,7 @@ class LlamaMoeServerHandler(ServerHandler):
         if not server_bin.exists():
             raise FileNotFoundError(f"llama-moe binary not found at {server_bin}")
 
-        model_path = self.model_info["path"]
+        model_path = self._resolve_model_path()
         # fmt: off
         cmd = [
             str(server_bin),
@@ -125,6 +129,26 @@ class LlamaMoeServerHandler(ServerHandler):
             self.stop_server()
             raise RuntimeError(f"llama-moe failed to start for {self.model_name}")
 
+    def _resolve_model_path(self) -> str:
+        base_path = Path(self.model_info["path"])
+
+        if self.model_prune_type is None and self.model_prune_coverage is None:
+            return str(base_path)
+
+        if self.model_prune_type is None or self.model_prune_coverage is None:
+            raise ValueError("model_prune_type and model_prune_coverage must be provided together")
+
+        prune_type = str(self.model_prune_type).strip()
+        coverage = str(self.model_prune_coverage).strip()
+
+        pruned_name = f"{base_path.stem}-pruned_{prune_type}_cov{coverage}{base_path.suffix}"
+        pruned_path = base_path.with_name(pruned_name)
+
+        if not pruned_path.exists():
+            raise FileNotFoundError(f"Pruned model not found: {pruned_path}")
+
+        return str(pruned_path)
+
     def stop_server(self):
         if self.process and self.process.poll() is None:
             pid = self.process.pid
@@ -153,7 +177,7 @@ class LlamaMoeServerHandler(ServerHandler):
                 pass
             self.log_f = None
 
-    def handle_result(self, data, duration):
+    def handle_result(self, data, duration=None):
         """
         Extract 'timings' from the response.
         """

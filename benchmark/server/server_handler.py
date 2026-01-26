@@ -15,7 +15,7 @@ class ServerHandler(ABC):
         pass
 
     @abstractmethod
-    def handle_result(data, duration):
+    def handle_result(data, duration=None):
         pass
 
     @abstractmethod

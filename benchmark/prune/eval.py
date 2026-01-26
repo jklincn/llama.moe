@@ -1,3 +1,4 @@
+from datetime import datetime
 import time
 from pathlib import Path
 
@@ -8,11 +9,26 @@ from evalscope.run import run_task
 from benchmark.server import LlamaMoeServerHandler
 
 
-def run_eval(model: str, dataset: list[str], limit: int | None = None):
-    handler = LlamaMoeServerHandler(model, ctx_size=4096, args=["--enable-counter"])
+def run_eval(
+    model: str,
+    dataset: list[str],
+    limit: int | None = None,
+    model_prune_type: str | None = None,
+    model_prune_coverage: str | None = None,
+):
+    handler = LlamaMoeServerHandler(
+        model,
+        ctx_size=4096,
+        args=["--enable-counter"],
+        model_prune_type=model_prune_type,
+        model_prune_coverage=model_prune_coverage,
+    )
 
     print("=" * 80)
-    print(f"模型: {model}")
+    if model_prune_type and model_prune_coverage:
+        print(f"模型: {model} (pruned_{model_prune_type}_cov{model_prune_coverage})")
+    else:
+        print(f"模型: {model}")
     print(f"数据集: {dataset}")
     print(f"limit: {limit if limit is not None else '不限'}")
 
@@ -41,12 +57,18 @@ def run_eval(model: str, dataset: list[str], limit: int | None = None):
         handler.stop_server()
         return None
 
-    output_dir = (Path("outputs") / "_".join(dataset)).resolve()
+    output_dir = Path("outputs") / datetime.now().strftime("%Y%m%d_%H%M%S")
     output_dir.mkdir(parents=True, exist_ok=True)
 
     task_config = TaskConfig(
         model=target_model_id,
         datasets=dataset,
+        # dataset_args={
+        #     "math_500": {
+        #         "subset_list": ["Level 4"],
+        #         "few_shot_num": 0,
+        #     }
+        # },
         eval_type=EvalType.SERVICE,
         eval_batch_size=1,
         api_url="http://127.0.0.1:8080/v1/chat/completions",
@@ -82,20 +104,40 @@ def run_eval(model: str, dataset: list[str], limit: int | None = None):
 if __name__ == "__main__":
     models = [
         # "Qwen3-Next-80B-A3B-Instruct",
-        "GLM-4.5-Air",
-        # "Qwen3-235B-A22B",
+        # "GLM-4.5-Air",
+        "Qwen3-235B-A22B",
     ]
 
     dataset = [
-        # Math
-        "gsm8k",
-        "math_500",
-        # Code
-        # "humaneval",
-        # "mbpp",
+        # Math (limit: 128)
+        # "gsm8k",
+        # "math_500",
+        # Code (limit: 82)
+        "humaneval",
+        "mbpp",
     ]
 
     limit = None
 
     for model in models:
         run_eval(model=model, dataset=dataset, limit=limit)
+        continue
+
+        for prune_type in [
+            "math",
+            # "code",
+        ]:
+            for coverage in [
+                "90",
+                # "92",
+                # "94",
+                # "96",
+                # "98",
+            ]:
+                run_eval(
+                    model=model,
+                    dataset=dataset,
+                    limit=limit,
+                    model_prune_type=prune_type,
+                    model_prune_coverage=coverage,
+                )

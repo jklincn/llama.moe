@@ -162,7 +162,7 @@ class LlamaCppServerHandler(ServerHandler):
                 pass
             self.log_f = None
 
-    def handle_result(self, data, duration):
+    def handle_result(self, data, duration=None):
         """
         Extract 'timings' from the response.
         """
