@@ -1,4 +1,5 @@
 import os
+import re
 import time
 import psutil
 from datetime import datetime
@@ -41,6 +42,7 @@ class FastLLMServerHandler(ServerHandler):
         self.args = args if args is not None else []
         self.process = None
         self.log_f = None
+        self.log_path = None
 
         # Statistics
         self.success_count = 0
@@ -96,6 +98,7 @@ class FastLLMServerHandler(ServerHandler):
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
         safe_name = self.model_name.replace("/", "_")
         log_path = os.path.join(self.log_dir, f"ftllm_{safe_name}_{ts}.log")
+        self.log_path = log_path
 
         cmd += self.args
 
@@ -126,6 +129,26 @@ class FastLLMServerHandler(ServerHandler):
             print(f"Logs: {log_path}")
             self.stop_server()
             raise RuntimeError(f"FastLLM server failed to start for {self.model_name}")
+
+    def _cleanup_log(self):
+        if not self.log_path or not os.path.exists(self.log_path):
+            return
+
+        tmp_path = f"{self.log_path}.tmp"
+        try:
+            with open(self.log_path, "r", encoding="utf-8", errors="ignore") as src, open(
+                tmp_path, "w", encoding="utf-8"
+            ) as dst:
+                for line in src:
+                    if not line.startswith("Loading"):
+                        dst.write(line)
+            os.replace(tmp_path, self.log_path)
+        finally:
+            if os.path.exists(tmp_path):
+                try:
+                    os.remove(tmp_path)
+                except Exception:
+                    pass
 
     def stop_server(self):
         """停止服务器进程"""
@@ -158,6 +181,8 @@ class FastLLMServerHandler(ServerHandler):
                 pass
             self.log_f = None
 
+        self._cleanup_log()
+
     def handle_result(self, data, duration):
         """
         Accumulates statistics from a completion result.
@@ -183,6 +208,21 @@ class FastLLMServerHandler(ServerHandler):
         Returns:
             float: Tokens per second (Total Tokens / Total Duration)
         """
+        speeds = []
+        if self.log_path and os.path.exists(self.log_path):
+            pattern = re.compile(r"Speed:\s*([0-9]*\.?[0-9]+)\s*tokens\s*/\s*s\.")
+            try:
+                with open(self.log_path, "r", encoding="utf-8", errors="ignore") as log_f:
+                    for line in log_f:
+                        match = pattern.search(line)
+                        if match:
+                            speeds.append(float(match.group(1)))
+            except Exception:
+                speeds = []
+
+        if speeds:
+            return sum(speeds) / len(speeds)
+
         if self.total_duration > 0:
             return self.total_completion_tokens / self.total_duration
         return 0.0

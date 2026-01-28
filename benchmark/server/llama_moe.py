@@ -96,6 +96,7 @@ class LlamaMoeServerHandler(ServerHandler):
             "--ctx-size", str(self.ctx_size),
             "--seed", "0",
             "--no-log-file",
+            "-np", "1",
         ] + self.args
         # fmt: on
 
@@ -136,12 +137,16 @@ class LlamaMoeServerHandler(ServerHandler):
             return str(base_path)
 
         if self.model_prune_type is None or self.model_prune_coverage is None:
-            raise ValueError("model_prune_type and model_prune_coverage must be provided together")
+            raise ValueError(
+                "model_prune_type and model_prune_coverage must be provided together"
+            )
 
         prune_type = str(self.model_prune_type).strip()
         coverage = str(self.model_prune_coverage).strip()
 
-        pruned_name = f"{base_path.stem}-pruned_{prune_type}_cov{coverage}{base_path.suffix}"
+        pruned_name = (
+            f"{base_path.stem}-pruned_{prune_type}_cov{coverage}{base_path.suffix}"
+        )
         pruned_path = base_path.with_name(pruned_name)
 
         if not pruned_path.exists():

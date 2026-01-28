@@ -75,12 +75,10 @@ def run_benchmark(
         temperature=temperature,
         top_p=top_p,
         extra_body={"top_k": top_k},
-        stream=True,
+        stream=False,
     )
 
     print("Running benchmark...")
-
-    failed_requests = 0
 
     try:
         for prompt in prompts:
@@ -102,7 +100,6 @@ def run_benchmark(
 
             except Exception as e:
                 print(f"Request failed: {e}")
-                failed_requests += 1
 
     except KeyboardInterrupt:
         print("\nBenchmark interrupted.")

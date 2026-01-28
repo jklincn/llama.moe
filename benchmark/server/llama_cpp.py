@@ -100,6 +100,7 @@ class LlamaCppServerHandler(ServerHandler):
             "--ctx-size", str(self.ctx_size),
             "--n-gpu-layers", str(n_gpu_layers),
             "--seed", "0",
+            "-np", "1",
         ] + self.args
         # fmt: on
 

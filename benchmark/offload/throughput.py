@@ -100,7 +100,7 @@ def run_benchmark(server_name: str, model_name: str, max_tokens=128, count=100):
         temperature=temperature,
         top_p=top_p,
         extra_body={"top_k": top_k},
-        stream=True,
+        stream=False,
     )
 
     print("Running benchmark...")
@@ -243,17 +243,17 @@ if __name__ == "__main__":
 
     models = [
         "Qwen3-Next-80B-A3B-Instruct",
-        # "GLM-4.5-Air",
-        # "Qwen3-235B-A22B",
+        "GLM-4.5-Air",
+        "Qwen3-235B-A22B",
     ]
 
     servers = [
-        # "llama-cpp",
+        "llama-cpp",
         # "fastllm",
-        "llama-moe",
+        # "llama-moe",
     ]
 
-    max_tokens = 2048
+    max_tokens = 4096
     count = 2
 
     total_tests = len(models) * len(servers)
